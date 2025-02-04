@@ -86,7 +86,7 @@ default: &DEFAULT
     log: True
     name: None # If None, config will be used but you can override it here
     group: "ucl-org"
-    project: "magnitude-pruning"
+    project: "training"
     entity: "michal.bravansky1" # put your username here
     sweep: False
     log_output: True

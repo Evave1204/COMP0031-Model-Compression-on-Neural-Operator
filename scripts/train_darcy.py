@@ -19,7 +19,7 @@ config_name = "default"
 pipe = ConfigPipeline(
     [
         YamlConfig(
-            "./darcy_config.yaml", config_name="default", config_folder="../config"
+            "./darcy_config.yaml", config_name="default", config_folder="./config"
         ),
         ArgparseConfig(infer_types=True, config_name=None, config_file=None),
         YamlConfig(config_folder="../config"),
@@ -203,4 +203,16 @@ trainer.train(
 )
 
 if config.wandb.log and is_logger:
+    torch.save(model.state_dict(), f"model-{config.wandb.name}-{wandb.run.id}.pt")
+
+    artifact = wandb.Artifact(
+        name=f"model-{config.wandb.name}-{wandb.run.id}", 
+        type="model",
+        description="Darcy FNO model"
+    )
+    artifact.add_file(f"model-{config.wandb.name}-{wandb.run.id}.pt")
+    wandb.log_artifact(artifact)
+
+    wandb.run.log_code(".", include_fn=lambda path: path.endswith(".py") or path.endswith(".yaml"))
+    
     wandb.finish()

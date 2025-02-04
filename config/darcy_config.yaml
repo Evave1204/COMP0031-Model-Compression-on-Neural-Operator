@@ -74,11 +74,11 @@ default: &DEFAULT
 
   # Weights and biases
   wandb:
-    log: False
-    name: None # If None, config will be used but you can override it here
-    group: '' 
-    project: ""
-    entity: "" # put your username here
+    log: True
+    name: fno-darcy-16-resolution # If None, config will be used but you can override it here
+    group: 'ucl-org' 
+    project: "training"
+    entity: "michal-bravansky1" # put your username here
     sweep: False
     log_output: True
     eval_interval: 1

@@ -83,11 +83,11 @@ default: &DEFAULT
 
   # Weights and biases
   wandb:
-    log: False
+    log: True
     name: None # If None, config will be used but you can override it here
-    group: ""
-    project: ""
-    entity: "" # put your username here
+    group: "ucl-org"
+    project: "magnitude-pruning"
+    entity: "michal.bravansky1" # put your username here
     sweep: False
     log_output: True
     eval_interval: 1

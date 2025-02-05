@@ -78,7 +78,7 @@ default: &DEFAULT
     name: fno-darcy-16-resolution # If None, config will be used but you can override it here
     group: 'ucl-org' 
     project: "training"
-    entity: "michal-bravansky1" # put your username here
+    entity: "ucl-neural-operator" # put your username here
     sweep: False
     log_output: True
     eval_interval: 1

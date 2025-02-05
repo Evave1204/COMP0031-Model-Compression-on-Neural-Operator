@@ -6,7 +6,7 @@ from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.nn.functional as F
 
 from neuralop import H1Loss, LpLoss, BurgersEqnLoss, ICLoss, WeightedSumLoss, Trainer, get_model
-from neuralop.data.datasets import load_burgers_1dtime
+from neuralop.data.datasets import Burgers1dTimeDataset
 from neuralop.data.transforms.data_processors import MGPatchingDataProcessor
 from neuralop.training import setup, AdamW
 from neuralop.utils import get_wandb_api_key, count_model_params
@@ -17,10 +17,10 @@ config_name = "default"
 pipe = ConfigPipeline(
     [
         YamlConfig(
-            "./burgers_config.yaml", config_name="default", config_folder="../config"
+            "./burgers_config.yaml", config_name="default", config_folder="./config"
         ),
         ArgparseConfig(infer_types=True, config_name=None, config_file=None),
-        YamlConfig(config_folder="../config"),
+        YamlConfig(config_folder="./config"),
     ]
 )
 config = pipe.read_conf()
@@ -39,12 +39,12 @@ if config.wandb.log and is_logger:
             f"{var}"
             for var in [
                 config_name,
-                config.fno2d.n_layers,
-                config.fno2d.n_modes_width,
-                config.fno2d.n_modes_height,
-                config.fno2d.hidden_channels,
-                config.fno2d.factorization,
-                config.fno2d.rank,
+                config.tfno2d.n_layers,
+                config.tfno2d.n_modes_width,
+                config.tfno2d.n_modes_height,
+                config.tfno2d.hidden_channels,
+                config.tfno2d.factorization,
+                config.tfno2d.rank,
                 config.patching.levels,
                 config.patching.padding,
             ]
@@ -71,13 +71,48 @@ if config.verbose:
     sys.stdout.flush()
 
 # Load the Burgers dataset
-train_loader, test_loaders, output_encoder = load_burgers_1dtime(data_path=config.data.folder,
-        n_train=config.data.n_train, batch_size=config.data.batch_size, 
-        n_test=config.data.n_tests[0], batch_size_test=config.data.test_batch_sizes[0],
-        temporal_length=config.data.temporal_length, spatial_length=config.data.spatial_length,
-        pad=config.data.get("pad", 0), temporal_subsample=config.data.get("temporal_subsample", 1),
-        spatial_subsample=config.data.get("spatial_subsample", 1),
-        )
+# train_loader, test_loaders, output_encoder = load_burgers_1dtime(data_path=config.data.folder,
+#         n_train=config.data.n_train, batch_size=config.data.batch_size, 
+#         n_test=config.data.n_tests[0], batch_size_test=config.data.test_batch_sizes[0],
+#         temporal_length=config.data.temporal_length, spatial_length=config.data.spatial_length,
+#         pad=config.data.get("pad", 0), temporal_subsample=config.data.get("temporal_subsample", 1),
+#         spatial_subsample=config.data.get("spatial_subsample", 1),
+#         )
+
+dataset = Burgers1dTimeDataset(
+    root_dir=config.data.folder,
+    n_train=config.data.n_train,
+    n_tests=[config.data.n_tests[0]],
+    batch_size=config.data.batch_size,
+    test_batch_sizes=config.data.test_batch_sizes,
+    temporal_subsample=config.data.get("temporal_subsample", 1),
+    spatial_subsample=config.data.get("spatial_subsample", 1),
+    pad=config.data.get("pad", 0)
+)
+
+# Create data loaders
+train_loader = torch.utils.data.DataLoader(
+    dataset.train_db,
+    batch_size=config.data.batch_size,
+    shuffle=True,
+    num_workers=0,
+    pin_memory=True,
+    persistent_workers=False
+)
+
+test_loaders = {}
+for res, test_batch_size in zip(dataset.test_resolutions, config.data.test_batch_sizes):
+    test_loaders[res] = torch.utils.data.DataLoader(
+        dataset.test_dbs[res],
+        batch_size=test_batch_size,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=True,
+        persistent_workers=False
+    )
+
+output_encoder = dataset.data_processor.out_normalizer
+
 
 model = get_model(config)
 
@@ -166,6 +201,8 @@ data_processor = MGPatchingDataProcessor(model=model,
                                        device=device,
                                        in_normalizer=output_encoder,
                                        out_normalizer=output_encoder)
+
+    
 trainer = Trainer(
     model=model,
     n_epochs=config.opt.n_epochs,

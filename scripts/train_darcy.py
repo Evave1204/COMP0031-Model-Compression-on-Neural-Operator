@@ -35,8 +35,12 @@ device, is_logger = setup(config)
 wandb_args = None
 if config.wandb.log and is_logger:
     wandb.login(key=get_wandb_api_key())
+    
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M')
+    
     if config.wandb.name:
-        wandb_name = config.wandb.name
+        wandb_name = f"{config.wandb.name}-{timestamp}"
     else:
         wandb_name = "_".join(
             f"{var}"
@@ -50,6 +54,7 @@ if config.wandb.log and is_logger:
                 config.fno.rank,
                 config.patching.levels,
                 config.patching.padding,
+                timestamp
             ]
         )
     wandb_args =  dict(
@@ -199,18 +204,22 @@ trainer.train(
     scheduler=scheduler,
     regularizer=False,
     training_loss=train_loss,
-    eval_losses=eval_losses,
+    eval_losses=eval_losses
 )
 
 if config.wandb.log and is_logger:
-    torch.save(model.state_dict(), f"model-{config.wandb.name}-{wandb.run.id}.pt")
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M')
+    model_name = f"model-{config.wandb.name}-{timestamp}"
+    
+    torch.save(model.state_dict(), f"{model_name}.pt")
 
     artifact = wandb.Artifact(
-        name=f"model-{config.wandb.name}-{wandb.run.id}", 
+        name=model_name,
         type="model",
         description="Darcy FNO model"
     )
-    artifact.add_file(f"model-{config.wandb.name}-{wandb.run.id}.pt")
+    artifact.add_file(f"{model_name}.pt")
     wandb.log_artifact(artifact)
 
     wandb.run.log_code(".", include_fn=lambda path: path.endswith(".py") or path.endswith(".yaml"))

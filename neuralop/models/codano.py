@@ -9,9 +9,12 @@ from ..layers.padding import DomainPadding
 from ..layers.coda_layer import CODALayer
 from ..layers.resample import resample
 from ..layers.embeddings import GridEmbedding2D, GridEmbeddingND
+from .base_model import BaseModel
+import types
 
-
-class CODANO(nn.Module):
+class CODANO(BaseModel, name='CODANO'):
+    _name = "CODANO"
+    _version = "1.0"
     """Codomain Attention Neural Operators (CoDA-NO) uses a specialized attention mechanism in the codomain space for data in
     infinite dimensional spaces as described in [1]_. The model treates each input channel as a variable of the physical system
     and uses attention mechanism to model the interactions between the variables. The model uses lifting and projection modules
@@ -165,6 +168,7 @@ class CODANO(nn.Module):
 
     def __init__(
         self,
+        in_channels = 1,
         output_variable_codimension=1,
         lifting_channels: int = 64,
         hidden_variable_codimension=32,
@@ -191,7 +195,9 @@ class CODANO(nn.Module):
         domain_padding_mode="one-sided",
         enable_cls_token=False,
     ):
+        
         super().__init__()
+        
         self.n_layers = n_layers
         assert len(n_modes) == n_layers, "number of modes for all layers are not given"
         assert (
@@ -451,7 +457,7 @@ class CODANO(nn.Module):
             x = torch.cat([x, positional_encoding.repeat(*repeat_shape)], dim=2)
         return x
 
-    def forward(self, x: torch.Tensor, static_channel=None, input_variable_ids=None):
+    def forward(self, **kwargs):
         """
         Parameters
         ----------
@@ -474,6 +480,10 @@ class CODANO(nn.Module):
         torch.Tensor
             output tensor of shape (batch_size, output_variable_codimension*num_inp_var, H, W, ...)
         """
+        x = kwargs.get('in_data')
+        static_channel = kwargs.get('static_channels')
+        input_variable_ids = kwargs.get('variable_ids')
+
         batch, num_inp_var, *spatial_shape = (
             x.shape
         )  # num_inp_var is the number of channels in the input
@@ -613,3 +623,80 @@ class CODANO(nn.Module):
         if self.enable_cls_token:
             x = x[:, self.output_variable_codimension :, ...]
         return x
+
+    def save_model(self, destination=None, prefix='', keep_vars=False):
+        """Create a state dictionary with model parameters and special components."""
+        # Create state dict directly from named parameters
+        state_dict = {
+            prefix + key: val.detach() if not keep_vars else val
+            for key, val in self.named_parameters()
+        }
+        
+        # Add buffers (like running stats in BatchNorm)
+        state_dict.update({
+            prefix + key: val.detach() if not keep_vars else val
+            for key, val in self.named_buffers()
+        })
+        
+        # Handle positional encoding separately if it exists
+        if hasattr(self, 'positional_encoding') and isinstance(self.positional_encoding, nn.ParameterDict):
+            for key, value in self.positional_encoding.items():
+                state_dict[prefix + f'positional_encoding.{key}'] = value if keep_vars else value.detach()
+        
+        # Store non_linearity function name if it's a standard PyTorch function
+        if hasattr(self, 'non_linearity'):
+            if self.non_linearity == F.gelu:
+                state_dict[prefix + 'non_linearity'] = 'gelu'
+            # Add other function mappings as needed
+        
+        return state_dict
+
+    def load_model(self, state_dict, strict=True):
+        """Load a state dictionary into the model."""
+        missing_keys = []
+        unexpected_keys = []
+        
+        # Handle regular parameters and buffers
+        for name, param in self.named_parameters():
+            if name in state_dict:
+                param.data = state_dict[name].clone()
+            elif strict:
+                missing_keys.append(name)
+                
+        for name, buf in self.named_buffers():
+            if name in state_dict:
+                buf.data = state_dict[name].clone()
+            elif strict:
+                missing_keys.append(name)
+        
+        # Handle positional encoding
+        if hasattr(self, 'positional_encoding'):
+            self.positional_encoding = nn.ParameterDict()
+            for key in list(state_dict.keys()):
+                if key.startswith('positional_encoding.'):
+                    param_key = key.split('.')[1]
+                    self.positional_encoding[param_key] = nn.Parameter(state_dict[key].clone())
+        
+        # Handle non_linearity function
+        if 'non_linearity' in state_dict:
+            func_name = state_dict['non_linearity']
+            if func_name == 'gelu':
+                self.non_linearity = F.gelu
+            # Add other function mappings as needed
+        
+        # Check for unexpected keys
+        if strict:
+            for key in state_dict.keys():
+                if not any(key.startswith(prefix) for prefix in ['positional_encoding.', 'non_linearity']):
+                    if key not in dict(self.named_parameters()) and key not in dict(self.named_buffers()):
+                        unexpected_keys.append(key)
+        
+        if strict and (missing_keys or unexpected_keys):
+            error_msg = []
+            if missing_keys:
+                error_msg.append(f'Missing key(s) in state_dict: {", ".join(missing_keys)}')
+            if unexpected_keys:
+                error_msg.append(f'Unexpected key(s) in state_dict: {", ".join(unexpected_keys)}')
+            raise RuntimeError('\n'.join(error_msg))
+        
+        return self

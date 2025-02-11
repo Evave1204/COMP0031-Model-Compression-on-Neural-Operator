@@ -386,8 +386,11 @@ class CODALayer(nn.Module):
         if self.multi_head_proj is not None:
             attention = self.multi_head_proj(attention)
         attention = self.attention_normalizer(attention + tokens)
-        attention_normalized = self.mixer_in_normalizer(attention)
-        output = self.mixer(attention_normalized, output_shape=input_shape)
+
+        # Pass through mixer layers sequentially
+        output = self.mixer_in_normalizer(attention)
+        for i in range(self.mixer.n_layers):
+            output = self.mixer(output, index=i, output_shape=input_shape)
         output = self.mixer_out_normalizer(output) + attention
 
         # reshape from shape (b*t) d h w... to b (t d) h w ...
@@ -439,17 +442,18 @@ class CODALayer(nn.Module):
 
         attention = self.attention_normalizer(attention + tokens)
 
-        # reshape for shape '(b*t) d h w.." to "b (t*d) h w ...'
-        t = attention.size(0) // batch_size
-        attention = attention.view(
-            batch_size,
-            t * attention.size(2),
-            *attention.shape[-self.n_dim:])
-
-        attention_normalized = self.mixer_in_normalizer(attention)
-        output = self.mixer(attention_normalized, output_shape=input_shape)
-
+        # Pass through mixer layers sequentially
+        output = self.mixer_in_normalizer(attention)
+        for i in range(self.mixer.n_layers):
+            output = self.mixer(output, index=i, output_shape=input_shape)
         output = self.mixer_out_normalizer(output) + attention
+
+        # reshape for shape '(b*t) d h w.." to "b (t*d) h w ...'
+        t = output.size(0) // batch_size
+        output = output.view(
+            batch_size,
+            t * output.size(2),
+            *output.shape[-self.n_dim:])
 
         if output_shape is not None:
             output = resample(output,

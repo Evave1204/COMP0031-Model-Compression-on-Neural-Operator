@@ -1,6 +1,9 @@
 # weights and biases
 .wandb/ 
 wandb_api_key.txt
+myenv/
+neuralop/data/datasets/data/
+models/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

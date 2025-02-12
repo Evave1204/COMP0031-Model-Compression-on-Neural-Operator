@@ -14,7 +14,7 @@ cfd: &CFD
 
   # Dataset related
   data:
-    root: /home/YOURNAME/data/car-pressure-data/
+    root: /cs/student/projects1/2022/mbravans/neuraloperator/neuralop/data/datasets/data
     sdf_query_resolution: 32
     n_train: 500
     n_test: 111
@@ -42,7 +42,7 @@ cfd: &CFD
     fno_resolution_scaling_factor: 1
 
   opt:
-    n_epochs: 301
+    n_epochs: 40
     learning_rate: 1e-3
     training_loss: 'l2' 
     testing_loss: 'l2' 
@@ -57,11 +57,11 @@ cfd: &CFD
 
   # Weights and biases
   wandb:
-    log: False #True
-    name: None # If None, config will be used but you can override it here
-    group: 'drag' 
-    project: ""
-    entity: ""
+    log: True
+    name: gino-carcfd-32-resolution
+    group: 'ucl-org' 
+    project: "training"
+    entity: "ucl-neural-operator"
     sweep: False
     log_output: True
     eval_interval: 1

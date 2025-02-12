@@ -97,7 +97,7 @@ class MeshDataModule:
         meshes = []
         for ind in mesh_ind:
             mesh = o3d.io.read_triangle_mesh(
-                str(data_dir / (item_dir_name + ind + "/tri_mesh.ply"))
+                str(data_dir / "data" / (item_dir_name + ind + "/tri_mesh.ply"))
             )
             meshes.append(mesh)
 
@@ -204,7 +204,7 @@ class MeshDataModule:
                     print(f"{j}-th pressure field ind {ind} was deleted.")
                     continue
                 for attr in attributes:
-                    path = str(data_dir / (item_dir_name + ind + "/" + attr + ".npy"))
+                    path = str(data_dir / "data" / (item_dir_name + ind + "/" + attr + ".npy"))
                     data[j][attr] = torch.from_numpy((np.load(path)))
 
                     if isinstance(data[j][attr], torch.Tensor):

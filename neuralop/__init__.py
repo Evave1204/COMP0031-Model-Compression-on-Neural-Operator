@@ -6,3 +6,5 @@ from .data import datasets, transforms
 from . import mpu
 from .training import Trainer
 from .losses import LpLoss, H1Loss, BurgersEqnLoss, ICLoss, WeightedSumLoss
+from .models.deeponet import DeepONet
+import torch

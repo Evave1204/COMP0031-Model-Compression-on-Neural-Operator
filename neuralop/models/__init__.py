@@ -11,4 +11,5 @@ from .uqno import UQNO
 from .fnogno import FNOGNO
 from .gino import GINO
 from .codano import CODANO
+from .deeponet import DeepONet
 from .base_model import get_model

@@ -1,0 +1,51 @@
+default:
+
+  arch: 'deeponet'
+
+  data:
+    n_train: 1000
+    batch_size: 16
+    test_resolutions: [16, 32, 128]
+    n_tests: [100, 100, 100]
+    test_batch_sizes: [16, 16, 16]
+    train_resolution: 128
+
+  deeponet:
+    in_channels: 1
+    data_channels: 1
+    out_channels: 1
+    hidden_channels: 64
+    branch_layers: [64, 64, 64, 64, 64]
+    trunk_layers: [64, 64, 64, 64, 64]
+    positional_embedding: 'grid'
+    non_linearity: 'gelu'
+    norm: 'instance_norm'
+    dropout: 0.1
+
+  opt:
+    n_epochs: 100
+    learning_rate: 5e-3
+    training_loss: 'l2'
+    weight_decay: 1e-4
+    amp_autocast: False
+
+    scheduler_T_max: 500
+    scheduler_patience: 5 # For ReduceLROnPlateau only
+    scheduler: 'StepLR' # Or 'CosineAnnealingLR' OR 'ReduceLROnPlateau'
+    step_size: 60
+    gamma: 0.5
+
+  wandb:
+    log: true
+    project: 'training'
+    name: deeponet-darcy-128-resolution
+    group: 'deeponet-darcy'
+    entity: null
+    eval_interval: 1
+    log_output: false
+    sweep: false
+
+  distributed:
+    use_distributed: false
+
+  verbose: true 

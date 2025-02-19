@@ -10,13 +10,14 @@ from neuralop.training.trainer import Trainer
 from neuralop.data.datasets import CarCFDDataset
 from neuralop.data.transforms.data_processors import DataProcessor
 from copy import deepcopy
+from neuralop.data.transforms.gino_processor import GINOCFDDataProcessor
 
 # query points is [sdf_query_resolution] * 3 (taken from config ahmed)
 # Read the configuration
 config_name = 'cfd'
-pipe = ConfigPipeline([YamlConfig('./gino_carcfd_config.yaml', config_name=config_name, config_folder='../config'),
+pipe = ConfigPipeline([YamlConfig('./gino_carcfd_config.yaml', config_name=config_name, config_folder='./config'),
                        ArgparseConfig(infer_types=True, config_name=None, config_file=None),
-                       YamlConfig(config_folder='../config')
+                       YamlConfig(config_folder='./config')
                       ])
 config = pipe.read_conf()
 
@@ -31,11 +32,15 @@ wandb_init_args = {}
 config_name = 'car-pressure'
 if config.wandb.log and is_logger:
     wandb.login(key=get_wandb_api_key())
+    
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M')
+    
     if config.wandb.name:
-        wandb_name = config.wandb.name
+        wandb_name = f"{config.wandb.name}-{timestamp}"
     else:
         wandb_name = '_'.join(
-            f'{var}' for var in [config_name, config.data.sdf_query_resolution])
+            f'{var}' for var in [config_name, config.data.sdf_query_resolution, timestamp])
 
     wandb_init_args = dict(config=config, 
                            name=wandb_name, 
@@ -91,73 +96,6 @@ if config.opt.testing_loss == 'l2':
 else:
     raise ValueError(f'Got {config.opt.testing_loss=}')
 
-# Handle data preprocessing to gino 
-
-class GINOCFDDataProcessor(DataProcessor):
-    """
-    Implements logic to preprocess data/handle model outputs
-    to train an GINO on the CFD car-pressure dataset
-    """
-
-    def __init__(self, normalizer, device='cuda'):
-        super().__init__()
-        self.normalizer = normalizer
-        self.device = device
-        self.model = None
-
-    def preprocess(self, sample):
-        # Turn a data dictionary returned by MeshDataModule's DictDataset
-        # into the form expected by the GINO
-        
-        # input geometry: just vertices
-        in_p = sample['vertices'].squeeze(0).to(self.device)
-        latent_queries = sample['query_points'].squeeze(0).to(self.device)
-        out_p = sample['vertices'].squeeze(0).to(self.device)
-        f = sample['distance'].to(self.device)
-
-        #Output data
-        truth = sample['press'].squeeze(0).unsqueeze(-1)
-
-        # Take the first 3586 vertices of the output mesh to correspond to pressure
-        # if there are less than 3586 vertices, take the maximum number of truth points
-        output_vertices = truth.shape[1]
-        if out_p.shape[0] > output_vertices:
-            out_p = out_p[:output_vertices,:]
-
-        truth = truth.to(device)
-
-        batch_dict = dict(input_geom=in_p,
-                          latent_queries=latent_queries,
-                          output_queries=out_p,
-                          latent_features=f,
-                          y=truth,
-                          x=None)
-
-        sample.update(batch_dict)
-
-        return sample
-    
-    def postprocess(self, out, sample):
-        if not self.training:
-            out = self.normalizer.inverse_transform(out)
-            y = self.normalizer.inverse_transform(sample['y'].squeeze(0))
-            sample['y'] = y
-
-        return out, sample
-    
-    def to(self, device):
-        self.device = device
-        self.normalizer = self.normalizer.to(device)
-        return self
-    
-    def wrap(self, model):
-        self.model = model
-
-    def forward(self, sample):
-        sample = self.preprocess(sample)
-        out = self.model(sample)
-        out, sample = self.postprocess(out, sample)
-        return out, sample
 
 output_encoder = deepcopy(data_module.normalizers['press']).to(device)
 data_processor = GINOCFDDataProcessor(normalizer=output_encoder, device=device)
@@ -181,3 +119,22 @@ trainer.train(
               training_loss=train_loss_fn,
               eval_losses={config.opt.testing_loss: test_loss_fn},
               regularizer=None,)
+
+if config.wandb.log and is_logger:
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M')
+    model_name = f"model-{config.wandb.name}-{timestamp}"
+    
+    torch.save(model.state_dict(), f"{model_name}.pt")
+
+    artifact = wandb.Artifact(
+        name=model_name,
+        type="model",
+        description="GINO CarCFD model"
+    )
+    artifact.add_file(f"{model_name}.pt")
+    wandb.log_artifact(artifact)
+
+    wandb.run.log_code(".", include_fn=lambda path: path.endswith(".py") or path.endswith(".yaml"))
+    
+    wandb.finish()

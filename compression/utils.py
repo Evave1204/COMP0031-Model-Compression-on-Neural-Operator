@@ -60,7 +60,8 @@ def evaluate_model(model, dataloader, data_processor, device='cuda'):
 
 
 def compare_models(model1, model2, test_loaders, data_processor, device, 
-                  model1_name="Original Model", model2_name="Compressed Model"):
+                  model1_name="Original Model", model2_name="Compressed Model",
+                  verbose=True):
     """Compare performance between two models across different resolutions.
     
     Args:
@@ -71,45 +72,53 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
         device: Device to run evaluation on
         model1_name: Name for the first model (default: "Original Model")
         model2_name: Name for the second model (default: "Compressed Model")
+        verbose: Whether to print detailed results (default: True)
     """
     results = {}
     
-    print("\n" + "="*50)
-    print(f"{model1_name.upper()} EVALUATION")
-    print("="*50)
+    if verbose:
+        print("\n" + "="*50)
+        print(f"{model1_name.upper()} EVALUATION")
+        print("="*50)
     
     for resolution, loader in test_loaders.items():
-        print(f"\nResults on {resolution}x{resolution} resolution")
-        print("-"*30)
+        if verbose:
+            print(f"\nResults on {resolution}x{resolution} resolution")
+            print("-"*30)
         results[f"{resolution}_base"] = evaluate_model(model1, loader, data_processor, device)
-        print(f"L2 Loss: {results[f'{resolution}_base']['l2_loss']:.6f}")
-        print(f"H1 Loss: {results[f'{resolution}_base']['h1_loss']:.6f}")
+        if verbose:
+            print(f"L2 Loss: {results[f'{resolution}_base']['l2_loss']:.6f}")
+            print(f"H1 Loss: {results[f'{resolution}_base']['h1_loss']:.6f}")
     
-    print("\n" + "="*50)
-    print(f"{model2_name.upper()} EVALUATION")
-    print("="*50)
+    if verbose:
+        print("\n" + "="*50)
+        print(f"{model2_name.upper()} EVALUATION")
+        print("="*50)
     
-    if hasattr(model2, 'get_compression_stats'):
+    if hasattr(model2, 'get_compression_stats') and verbose:
         stats = model2.get_compression_stats()
         print(f"\nModel sparsity: {stats['sparsity']:.2%}")
     
     for resolution, loader in test_loaders.items():
-        print(f"\nResults on {resolution}x{resolution} resolution")
-        print("-"*30)
+        if verbose:
+            print(f"\nResults on {resolution}x{resolution} resolution")
+            print("-"*30)
         results[f"{resolution}_compressed"] = evaluate_model(model2, loader, data_processor, device)
-        print(f"L2 Loss: {results[f'{resolution}_compressed']['l2_loss']:.6f}")
-        print(f"H1 Loss: {results[f'{resolution}_compressed']['h1_loss']:.6f}")
+        if verbose:
+            print(f"L2 Loss: {results[f'{resolution}_compressed']['l2_loss']:.6f}")
+            print(f"H1 Loss: {results[f'{resolution}_compressed']['h1_loss']:.6f}")
     
-    print("\n" + "="*50)
-    print("PERFORMANCE COMPARISON")
-    print("="*50)
-    print("\nRelative increase in error (compressed vs original):")
-    print("-"*50)
+    if verbose:
+        print("\n" + "="*50)
+        print("PERFORMANCE COMPARISON")
+        print("="*50)
+        print("\nRelative increase in error (compressed vs original):")
+        print("-"*50)
     
-    for resolution in test_loaders.keys():
-        base_results = results[f"{resolution}_base"]
-        comp_results = results[f"{resolution}_compressed"]
-        print(f"{resolution}x{resolution} - L2: {(comp_results['l2_loss']/base_results['l2_loss'] - 1)*100:.2f}%")
-        print(f"{resolution}x{resolution} - H1: {(comp_results['h1_loss']/base_results['h1_loss'] - 1)*100:.2f}%")
+        for resolution in test_loaders.keys():
+            base_results = results[f"{resolution}_base"]
+            comp_results = results[f"{resolution}_compressed"]
+            print(f"{resolution}x{resolution} - L2: {(comp_results['l2_loss']/base_results['l2_loss'] - 1)*100:.2f}%")
+            print(f"{resolution}x{resolution} - H1: {(comp_results['h1_loss']/base_results['h1_loss'] - 1)*100:.2f}%")
     
     return results

@@ -75,10 +75,10 @@ default: &DEFAULT
   # Weights and biases
   wandb:
     log: True
-    name: fno-darcy-16-resolution # If None, config will be used but you can override it here
+    name: fno-darcy-16-resolution
     group: 'ucl-org' 
     project: "training"
-    entity: "ucl-neural-operator" # put your username here
+    entity: "ucl-neural-operator"
     sweep: False
     log_output: True
     eval_interval: 1

@@ -60,6 +60,7 @@ if config.wandb.log and is_logger:
 
 # Loading the Darcy flow dataset
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
+    train_resolution = config.data.train_resolution,
     n_train=config.data.n_train,
     batch_size=config.data.batch_size,
     test_resolutions=config.data.test_resolutions,
@@ -68,6 +69,8 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_input=False,
     encode_output=False,
 )
+
+print(test_loaders[config.data.test_resolutions[0]].dataset[0]["x"].shape)
 
 model = get_model(config)
 model = model.to(device)

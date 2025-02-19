@@ -3,28 +3,29 @@ default:
   arch: 'deeponet'
 
   data:
-    n_train: 1000
+    n_train: 4000
     batch_size: 16
-    test_resolutions: [16, 32, 128]
-    n_tests: [100, 100, 100]
+    test_resolutions: [128]
+    n_tests: [200]
     test_batch_sizes: [16, 16, 16]
     train_resolution: 128
 
   deeponet:
+    train_resolution: 128 
     in_channels: 1
     data_channels: 1
     out_channels: 1
     hidden_channels: 64
-    branch_layers: [64, 64, 64, 64, 64]
-    trunk_layers: [64, 64, 64, 64, 64]
+    branch_layers: [256, 256, 256, 256, 128]
+    trunk_layers: [256, 256, 256, 256, 128]
     positional_embedding: 'grid'
     non_linearity: 'gelu'
     norm: 'instance_norm'
-    dropout: 0.1
+    dropout: 0.0
 
   opt:
-    n_epochs: 100
-    learning_rate: 5e-3
+    n_epochs: 40
+    learning_rate: 1e-3
     training_loss: 'l2'
     weight_decay: 1e-4
     amp_autocast: False

@@ -1,6 +1,7 @@
 from neuralop.models import CODANO
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
+from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
@@ -62,9 +63,17 @@ pruned_model = CompressedModel(
 )
 pruned_model = pruned_model.to(device)
 
+lowrank_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
+                                                   min_rank=8, max_rank=16),
+    create_replica=True
+)
+lowrank_model = lowrank_model.to(device)
+
 compare_models(
     model1=fno_model,
-    model2=pruned_model,
+    model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device

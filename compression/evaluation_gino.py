@@ -1,6 +1,7 @@
 from neuralop import get_model
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
+from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.base import CompressedModel
 from neuralop.data.datasets import CarCFDDataset
 from compression.utils import evaluate_model, compare_models
@@ -16,7 +17,7 @@ config = pipe.read_conf()
 gino_model = get_model(config)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-gino_model.load_state_dict(torch.load("model-gino-carcfd-32-resolution-2025-02-12-18-47.pt", weights_only=False))
+gino_model.load_state_dict(torch.load("models/model-gino-carcfd-32-resolution-2025-02-12-18-47.pt", weights_only=False))
 gino_model.eval()
 gino_model = gino_model.to(device)
 
@@ -38,6 +39,14 @@ pruned_model = CompressedModel(
     create_replica=True
 )
 pruned_model = pruned_model.to(device)
+
+lowrank_model = CompressedModel(
+    model=gino_model,
+    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
+                                                   min_rank=8, max_rank=16),
+    create_replica=True
+)
+lowrank_model = lowrank_model.to(device)
 
 # Compare models
 compare_models(

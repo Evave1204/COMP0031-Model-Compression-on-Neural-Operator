@@ -14,7 +14,7 @@ cfd: &CFD
 
   # Dataset related
   data:
-    root: /cs/student/projects1/2022/mbravans/neuraloperator/neuralop/data/datasets/data
+    root: /cs/student/projects1/2022/chenghon/COMP0031-Model-Compression-on-Neural-Operator/neuralop/data/datasets/data
     sdf_query_resolution: 32
     n_train: 500
     n_test: 111

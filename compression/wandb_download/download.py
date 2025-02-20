@@ -1,20 +1,22 @@
 import wandb
-run = wandb.init()
-artifact = run.use_artifact('ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-02-05-19-55:v0', type='model')
-artifact_dir = artifact.download()
+
+wandb.login()
+
+models_dir = "models/" 
+artifacts = [
+    "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-02-05-19-55:v0",
+    "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-02-12-18-47:v0",
+    "ucl-neural-operator/training/model-codano-darcy-16-resolution-2025-02-11-21-13:v0",
+    "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-02-05-18-13:v0",
+    "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-02-05-16-07:v0",
+    "ucl-neural-operator/training/model-deeponet-darcy-128-resolution-2025-02-19-22-23:v0",
+]
 
 run = wandb.init()
-artifact = run.use_artifact('ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-02-12-18-47:v0', type='model')
-artifact_dir = artifact.download()
 
-run = wandb.init()
-artifact = run.use_artifact('ucl-neural-operator/training/model-codano-darcy-16-resolution-2025-02-11-21-13:v0', type='model')
-artifact_dir = artifact.download()
+for artifact_name in artifacts:
+    artifact = run.use_artifact(artifact_name, type="model")
+    artifact_dir = artifact.download(root=models_dir)
+    print(f"Downloaded {artifact_name} to {artifact_dir}")
 
-run = wandb.init()
-artifact = run.use_artifact('ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-02-05-18-13:v0', type='model')
-artifact_dir = artifact.download()
-
-run = wandb.init()
-artifact = run.use_artifact('ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-02-05-16-07:v0', type='model')
-artifact_dir = artifact.download()
+run.finish()

@@ -20,7 +20,7 @@ deeponet_model = DeepONet(
 )
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-deeponet_model.load_state_dict(torch.load("model-deeponet-darcy-128-resolution-2025-02-19-22-23.pt", weights_only=False))
+deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-02-19-22-23.pt", weights_only=False))
 deeponet_model.eval()
 deeponet_model = deeponet_model.to(device)
 
@@ -43,12 +43,13 @@ pruned_model = pruned_model.to(device)
 
 lowrank_model = CompressedModel(
     model=deeponet_model,
-    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7,
-                                                 min_rank=8, max_rank=16),
+    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.5,
+                                                 min_rank=4, max_rank=128),
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)
 
+print("Pruning.....")
 compare_models(
     model1=deeponet_model,
     model2=pruned_model,
@@ -57,6 +58,7 @@ compare_models(
     device=device
 )
 
+print("Low Ranking.....")
 compare_models(
     model1=deeponet_model,
     model2=lowrank_model,

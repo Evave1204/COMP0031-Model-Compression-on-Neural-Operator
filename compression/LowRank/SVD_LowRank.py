@@ -36,6 +36,14 @@ class SVDLowRank:
         self.compressed_layers = {}
     
     def _get_target_rank(self, weight: torch.Tensor) -> int:
+        if torch.isnan(weight).any() or not torch.isfinite(weight).all():
+            raise ValueError("NaN/Inf")
+
+        if weight.dim() != 2:
+            weight = weight.view(weight.size(0), -1) 
+        
+        weight = weight.cpu().float()
+
         if weight.is_complex():
             U_real, S_real, _ = torch.linalg.svd(weight.real.float())
             U_imag, S_imag, _ = torch.linalg.svd(weight.imag.float())
@@ -46,11 +54,38 @@ class SVDLowRank:
         valid_indices = torch.where(energy <= self.rank_ratio)[0]
         rank = valid_indices.numel() + 1 if valid_indices.numel() > 0 else 1
         return max(min(rank, self.max_rank), self.min_rank)
+    
+    def compress_FC(self, layer, name):
+        weight = layer.weight.data
+        weight = torch.nan_to_num(weight, nan=0.0, posinf=1.0, neginf=-1.0)
+
+        U,S,V = torch.svd(weight.float())
+        target_rank = self._get_target_rank(weight=weight)
+        
+        # truncate from rank
+        U_trunc = U[:, :target_rank]
+        S_trunc = S[:target_rank]
+        V_trunc = V[:, :target_rank]
+
+        # create 2 linear layers
+        linear1 = nn.Linear(layer.in_features, target_rank, bias=False)
+        linear1.weight.data = V_trunc.t()
+
+        linear2 = nn.Linear(target_rank, layer.out_features, bias=layer.bias is not None)
+        linear2.weight.data = U_trunc @ torch.diag(S_trunc)  # [out_features, target_rank]
+    
+        # copy bias if there is
+        if layer.bias is not None:
+            linear2.bias.data = layer.bias.data.clone()
+    
+        # create a sequential
+        seq = nn.Sequential(linear1, linear2)
+        self.compressed_layers[name] = seq
 
     def compress_conv1d(self, layer, name):
         """
         Compress a Conv1d(kernel_size=1) layer using SVD decomposition.
-        Replaces the layer with: Conv1d(in_channels, rank, 1) → ReLU → Conv1d(rank, out_channels, 1)
+        Replaces the layer with: Conv1d(in_channels, rank, 1) → Conv1d(rank, out_channels, 1) → ReLU
         """
         W = layer.weight.data  # [out_channels, in_channels, 1]
         out_channels, in_channels, kernel_size = W.shape
@@ -136,7 +171,9 @@ class SVDLowRank:
             # Handle Conv1d (kernel_size=1)
             if isinstance(module, nn.Conv1d) and module.kernel_size == (1,):
                 self.compress_conv1d(module, name)
-            # Handle SpectralConv (DenseTensor)
+            elif isinstance(module, nn.Linear):
+                self.compress_FC(module, name)
+            # Handle SpectralConv (DenseTensor) 
             elif "SpectralConv" in type(module).__name__:
                 if hasattr(module, "weight"):
                     self.compress_spectral_conv(module, name)

@@ -98,6 +98,10 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
     if hasattr(model2, 'get_compression_stats') and verbose:
         stats = model2.get_compression_stats()
         print(f"\nModel sparsity: {stats['sparsity']:.2%}")
+        # for dynamic quantization method, we need compare model size
+        print(f"Original model size: {stats['original_size'] / (1024*1024):.2f} MB")
+        print(f"Quantized model size: {stats['quantized_size'] / (1024*1024):.2f} MB")
+        print(f"Compression ratio: {stats['compression_ratio']:.2%}")
     
     for resolution, loader in test_loaders.items():
         if verbose:

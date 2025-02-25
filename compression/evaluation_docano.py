@@ -2,10 +2,14 @@ from neuralop.models import CODANO
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
+from compression.quantization.static_quantization import StaticQuantization
+from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
+
+
 
 fno_model = CODANO(
     in_channels=1,
@@ -33,6 +37,7 @@ fno_model = CODANO(
 )
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+cpu_device = torch.device('cpu')
 fno_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt", weights_only=False))
 fno_model.eval()
 fno_model = fno_model.to(device)
@@ -47,6 +52,7 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_input=False, 
     encode_output=False,
 )
+
 test_loader_16 = test_loaders[16]
 test_loader_32 = test_loaders[32]
 
@@ -56,6 +62,10 @@ data_processor = CODANODataProcessor(
     out_normalizer=data_processor.out_normalizer
 )
 
+
+###################################################
+# Global Magnitude Pruning  
+###################################################
 pruned_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.05),
@@ -63,6 +73,10 @@ pruned_model = CompressedModel(
 )
 pruned_model = pruned_model.to(device)
 
+
+#####################################
+# SVD Low-Rank Decomposition 
+#####################################
 lowrank_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
@@ -71,10 +85,44 @@ lowrank_model = CompressedModel(
 )
 lowrank_model = lowrank_model.to(device)
 
+
+
+
+###################################################
+# Dynamic Quantization (Post-Training)  
+###################################################
+dynamic_quant_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+
+# If you want CPU inference for dynamic quant
+dynamic_quant_model = dynamic_quant_model.to('cpu')
+
+
+
 compare_models(
     model1=fno_model,
     model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device
+)
+
+# Compare original fno_model to the static_quantized_model
+compare_models(
+    model1=fno_model,
+    model2=quantized_model,
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device='cpu'
+)
+
+compare_models(
+    model1=fno_model,               # can remain on CPU or GPU, but if device='cpu', it moves it
+    model2=dynamic_quant_model,     # this is dynamic quant model on CPU
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device='cpu'
 )

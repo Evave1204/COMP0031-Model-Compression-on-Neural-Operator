@@ -2,6 +2,7 @@ from neuralop.models import FNO
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
+from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
@@ -47,6 +48,26 @@ pruned_model = CompressedModel(
 )
 pruned_model = pruned_model.to(device)
 
+
+# ---- Dynamic Quantization Compression ----
+dynamic_quant_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+# For dynamic quantization, inference must occur on CPU.
+dynamic_quant_model = dynamic_quant_model.to('cpu')
+
+# Evaluate both models on CPU
+compare_models(
+    model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
+    model2=dynamic_quant_model,     # The dynamically quantized model
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device='cpu'
+)
+
+
 lowrank_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
@@ -62,3 +83,5 @@ compare_models(
     data_processor=data_processor,
     device=device
 )
+
+

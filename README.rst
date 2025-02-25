@@ -4,13 +4,16 @@ Model Compression on Neural Operator
 
 How to start work in convenience
 --------------------------------
-1. Set the python path
+1. Set the python path (for lab machine, and run it each time you reconnect lab machine)
 .. code ::
    setenv PYTHONPATH `pwd`
-2. Download models
+2. Download dataset
+.. code ::
+   python compression/dataset_download.py
+3. Download models
 .. code ::
    python compression/wandb_download/download.py
-3. Evaluation Example
+4. Evaluation Example (on docano)
 .. code :: 
    python compression/evaluation_docano.py
 .. .. image:: https://img.shields.io/pypi/v/neuraloperator

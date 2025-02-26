@@ -262,7 +262,7 @@ Returns the modified model.
             elif "SpectralConv" in type(module).__name__:
                 new_module = self.compress_spectral_conv(module, name)
                 self.replace_module(name, new_module)
-        print("----------------------[Dynamic Quantization] Compression applied successfully------------------------")        
+        print("------------------------------[Dynamic Quantization] Compression applied successfully------------------------------")        
         return self.model
         
     

@@ -8,6 +8,7 @@ from neuralop.data.datasets import load_darcy_flow_small
 import numpy as np
 from neuralop.data.transforms.data_processors import MGPatchingDataProcessor
 from neuralop.training.training_state import load_training_state
+from neuralop.layers.spectral_convolution_lowrank import DoubleSpectralConv
 import torch
 import torch.nn as nn
 from typing import Dict
@@ -44,12 +45,12 @@ class SVDLowRank:
         
         weight = weight.cpu().float()
 
-        if weight.is_complex():
-            U_real, S_real, _ = torch.linalg.svd(weight.real.float())
-            U_imag, S_imag, _ = torch.linalg.svd(weight.imag.float())
-            S = (S_real + S_imag) / 2
-        else:
-            _, S, _ = torch.linalg.svd(weight.float())
+        # if weight.is_complex():
+        #     U_real, S_real, _ = torch.linalg.svd(weight.real.float())
+        #     U_imag, S_imag, _ = torch.linalg.svd(weight.imag.float())
+        #     S = (S_real + S_imag) / 2
+        # else:
+        _, S, _ = torch.linalg.svd(weight.float())
         energy = (S ** 2).cumsum(dim=0) / (S ** 2).sum()
         valid_indices = torch.where(energy <= self.rank_ratio)[0]
         rank = valid_indices.numel() + 1 if valid_indices.numel() > 0 else 1
@@ -132,32 +133,33 @@ class SVDLowRank:
             return
 
         # Extract tensor
-        W_torch = layer.weight.to_tensor()  # Shape: [C_out, C_in, Nx, Ny]
-        C_out, C_in, Nx, Ny = W_torch.shape
+        weight = layer.weight.to_tensor()
+        C_out, C_in, H, W = weight.shape
+        weight = weight.permute(0,2,3,1).reshape(C_out*H*W, C_in)
+        U, S, Vh = torch.linalg.svd(weight, full_matrices=False)
 
-        # Reshape to (C_out*C_in, Nx*Ny) and perform SVD
-        W_2d = W_torch.reshape(C_out * C_in, Nx * Ny)
+        # rank = self._get_target_rank(weight)
+        # U_trunc = U[:, :rank]
+        # S_trunc = S[:rank].to(torch.complex64)
+        # Vh_trunc = Vh[:rank, :]
+        _, rank = U.shape
+        U_trunc = U
+        S_trunc = S.to(torch.complex64)
+        Vh_trunc = Vh
 
-        U, S, Vh = torch.linalg.svd(W_2d, full_matrices=False)
+        weight1 = (Vh_trunc.T).reshape(C_in, rank, 1, 1)
+        weight2 = (U_trunc @ torch.diag(S_trunc)).reshape(C_out, H, W, rank).permute(3, 0, 1, 2)
 
-        # Truncate
-        rank = self._get_target_rank(W_2d)
-        U = U[:, :rank]
-        S = S[:rank]
-        Vh = Vh[:rank, :]
+        new_layer = DoubleSpectralConv(in_channels=C_in,
+                                       out_channels=C_out,
+                                       n_modes=(H,W),
+                                       mid_channels=rank)
+        with torch.no_grad():
+            new_layer.weight1 = weight1.copy_(weight1)
+            new_layer.weight2 = weight2.copy_(weight2)
 
-        # Low-rank approximation
-        U_S = U * S.unsqueeze(0)
-        W_2d_low = U_S @ Vh
-        W_low = W_2d_low.view(C_out, C_in, Nx, Ny)
+        self.compressed_layers[name] = new_layer
 
-        new_layer = copy.deepcopy(layer)
-        # Store new tensor
-        if hasattr(layer.weight, "from_tensor"):
-            new_layer.weight.from_tensor(W_low)
-            self.compressed_layers[name] = new_layer
-        else:
-            print(f"[Warning] DenseTensor at {name} has no 'from_tensor()' method. Skipping.")
 
     def compress(self):
         """
@@ -193,6 +195,7 @@ class SVDLowRank:
         print("[LowRank] Compression applied successfully.")
         print("Original:",self.original_params)
         print("Compressed", self.compressed_params)
+        print(self.model)
         return self.model
 
     def get_compression_stats(self) -> Dict[str, Union[int, float]]:

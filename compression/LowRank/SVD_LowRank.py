@@ -45,11 +45,6 @@ class SVDLowRank:
         
         weight = weight.cpu().float()
 
-        # if weight.is_complex():
-        #     U_real, S_real, _ = torch.linalg.svd(weight.real.float())
-        #     U_imag, S_imag, _ = torch.linalg.svd(weight.imag.float())
-        #     S = (S_real + S_imag) / 2
-        # else:
         _, S, _ = torch.linalg.svd(weight.float())
         energy = (S ** 2).cumsum(dim=0) / (S ** 2).sum()
         valid_indices = torch.where(energy <= self.rank_ratio)[0]
@@ -125,40 +120,38 @@ class SVDLowRank:
         self.compressed_layers[name] = seq
 
     def compress_spectral_conv(self, layer, name):
+        # TODO: There are one more calculations at single spectral layers
         """
         Compress a SpectralConv layer by applying low-rank SVD on channel dimensions.
         """
         if not hasattr(layer.weight, "to_tensor"):
             print(f"[Warning] DenseTensor at {name} has no 'to_tensor()' method. Skipping.")
             return
-
         # Extract tensor
-        weight = layer.weight.to_tensor()
-        C_out, C_in, H, W = weight.shape
-        weight = weight.permute(0,2,3,1).reshape(C_out*H*W, C_in)
+        original_weight = layer.weight.to_tensor()
+        C_in, C_out, H, W = original_weight.shape
+        weight = original_weight.permute(1,2,3,0).reshape(C_out*H*W, C_in)
         U, S, Vh = torch.linalg.svd(weight, full_matrices=False)
 
-        # rank = self._get_target_rank(weight)
-        # U_trunc = U[:, :rank]
-        # S_trunc = S[:rank].to(torch.complex64)
-        # Vh_trunc = Vh[:rank, :]
-        _, rank = U.shape
-        U_trunc = U
-        S_trunc = S.to(torch.complex64)
-        Vh_trunc = Vh
+        rank = self._get_target_rank(weight)
+        U_trunc = U[:, :rank]
+        S_trunc = S[:rank].to(torch.complex64)
+        Vh_trunc = Vh[:rank, :]
 
-        weight1 = (Vh_trunc.T).reshape(C_in, rank, 1, 1)
+        weight1 = (Vh_trunc.T).reshape(C_in, rank, 1, 1).expand(-1, -1, H, W)
         weight2 = (U_trunc @ torch.diag(S_trunc)).reshape(C_out, H, W, rank).permute(3, 0, 1, 2)
-
-        new_layer = DoubleSpectralConv(in_channels=C_in,
-                                       out_channels=C_out,
-                                       n_modes=(H,W),
-                                       mid_channels=rank)
-        with torch.no_grad():
-            new_layer.weight1 = weight1.copy_(weight1)
-            new_layer.weight2 = weight2.copy_(weight2)
-
-        self.compressed_layers[name] = new_layer
+        total_n_params = weight1.numel() + weight2.numel()
+        if (total_n_params > original_weight.numel()):
+            self.compressed_layers[name] = layer
+        else:
+            new_layer = DoubleSpectralConv(in_channels=C_in,
+                                        out_channels=C_out,
+                                        n_modes=(H,W),
+                                        mid_channels=rank)
+            with torch.no_grad():
+                new_layer.weight1 = nn.Parameter(weight1.clone(), requires_grad=True)
+                new_layer.weight2 = nn.Parameter(weight2.clone(), requires_grad=True)
+            self.compressed_layers[name] = new_layer
 
 
     def compress(self):
@@ -191,11 +184,9 @@ class SVDLowRank:
             setattr(parent_module, child_name, new_layer)
 
         self.compressed_params = sum(p.numel() for p in self.model.parameters())
-
         print("[LowRank] Compression applied successfully.")
         print("Original:",self.original_params)
         print("Compressed", self.compressed_params)
-        print(self.model)
         return self.model
 
     def get_compression_stats(self) -> Dict[str, Union[int, float]]:

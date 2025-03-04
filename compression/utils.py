@@ -1,13 +1,12 @@
 import torch
+import time
 from neuralop.losses import LpLoss, H1Loss
+from fvcore.nn import FlopCountAnalysis
+from ptflops import get_model_complexity_info
 
-def evaluate_model(model, dataloader, data_processor, device='cuda'):
+def evaluate_model(model, dataloader, data_processor, device='cuda', track_performance=False, verbose=False):
     """
-    Evaluates model performance in a way that exactly mirrors the Trainer's behavior.
-    
-    This implementation uses loss functions set to `reduction='mean'` to match the 
-    trainer's default behavior. The loss is averaged over both the batch and spatial 
-    dimensions.
+    Evaluates model performance with optional tracking of runtime, memory usage, and FLOPs.
     
     Parameters
     ----------
@@ -19,17 +18,40 @@ def evaluate_model(model, dataloader, data_processor, device='cuda'):
         Optional data processor for any preprocessing/postprocessing.
     device : str
         The device on which to run the evaluation (default 'cuda').
+    track_performance : bool
+        Whether to track runtime, memory usage, and FLOPs (default False).
+    verbose : bool
+        Whether to print detailed information during evaluation (default False).
         
     Returns
     -------
     dict
-        Dictionary containing the averaged 'l2_loss' and 'h1_loss'.
+        Dictionary containing metrics including 'l2_loss' and performance metrics.
     """
     model.eval()
     total_l2_loss = 0.0
     total_h1_loss = 0.0
+    total_runtime = 0.0
+    batch_count = 0
+    
+    flops_counted = False
+    flops = 0
+    
+    model_size_mb = 0
+    if track_performance and torch.cuda.is_available():
+        model = model.to('cpu')
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats(device)
+        before_model_load = torch.cuda.memory_allocated(device)
 
-    model = model.to(device)
+        model = model.to(device)
+        model_size_mb = (torch.cuda.memory_allocated(device) - before_model_load) / (1024 * 1024)
+
+        torch.cuda.reset_peak_memory_stats(device)
+        start_memory = torch.cuda.memory_allocated(device)
+    else:
+        model = model.to(device)
+    
     if data_processor is not None:
         data_processor = data_processor.to(device)
         data_processor.eval()
@@ -44,24 +66,74 @@ def evaluate_model(model, dataloader, data_processor, device='cuda'):
             else:
                 processed_data = {k: v.to(device)
                                   for k, v in batch.items() if torch.is_tensor(v)}
-
+            
+            # Measure FLOPs on first batch only using ptflops
+            if track_performance and not flops_counted:
+                try:
+                    # Create an input constructor that returns the processed data dictionary
+                    def input_constructor(input_res):
+                        return {k: v.clone() for k, v in processed_data.items() if torch.is_tensor(v)}
+                    
+                    # Get model complexity using ptflops - note that input_res is unused in our constructor
+                    macs, params = get_model_complexity_info(
+                        model, (1,), input_constructor=input_constructor,
+                        as_strings=False, print_per_layer_stat=False, verbose=verbose, 
+                        backend='aten'  # 'aten' backend is more comprehensive
+                    )
+                    
+                    # Convert MACs to FLOPs (multiply by 2)
+                    flops = macs * 2
+                    flops_counted = True
+                    
+                except Exception as e:
+                    if verbose:
+                        print(f"Error measuring FLOPs with ptflops: {e}")
+                    flops = 0
+            
+            # Track runtime
+            if track_performance:
+                start_time = time.time()
+            
             out = model(**processed_data)
+            
+            if track_performance:
+                # Wait for CUDA operations to finish
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize(device)
+                end_time = time.time()
+                total_runtime += (end_time - start_time)
 
             if data_processor is not None:
                 out, processed_data = data_processor.postprocess(out, processed_data)
 
             total_l2_loss += l2_loss(out, processed_data['y']).item()
             total_h1_loss += h1_loss(out, processed_data['y']).item()
+            batch_count += 1
 
     avg_l2_loss = total_l2_loss / len(dataloader)
     avg_h1_loss = total_h1_loss / len(dataloader)
 
-    return {'l2_loss': avg_l2_loss, 'h1_loss': avg_h1_loss}
+    result = {'l2_loss': avg_l2_loss, 'h1_loss': avg_h1_loss}
+
+    if track_performance:
+        result['runtime'] = total_runtime / max(batch_count, 1)
+
+        if model_size_mb > 0:
+            result['model_size_mb'] = model_size_mb
+
+        if torch.cuda.is_available():
+            peak_memory = torch.cuda.max_memory_allocated(device) - start_memory
+            result['peak_memory_mb'] = peak_memory / (1024 * 1024)
+            
+        if flops > 0:
+            result['flops'] = flops
+    
+    return result
 
 
 def compare_models(model1, model2, test_loaders, data_processor, device, 
                   model1_name="Original Model", model2_name="Compressed Model",
-                  verbose=True):
+                  verbose=True, track_performance=False):
     """Compare performance between two models across different resolutions.
     
     Args:
@@ -73,6 +145,7 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
         model1_name: Name for the first model (default: "Original Model")
         model2_name: Name for the second model (default: "Compressed Model")
         verbose: Whether to print detailed results (default: True)
+        track_performance: Whether to track runtime, memory usage and FLOPs (default: False)
     """
     results = {}
     
@@ -85,10 +158,19 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
         if verbose:
             print(f"\nResults on {resolution}x{resolution} resolution")
             print("-"*30)
-        results[f"{resolution}_base"] = evaluate_model(model1, loader, data_processor, device)
+        results[f"{resolution}_base"] = evaluate_model(model1, loader, data_processor, device, 
+                                                     track_performance=track_performance)
         if verbose:
             print(f"L2 Loss: {results[f'{resolution}_base']['l2_loss']:.6f}")
-            print(f"H1 Loss: {results[f'{resolution}_base']['h1_loss']:.6f}")
+            if track_performance:
+                if 'runtime' in results[f'{resolution}_base']:
+                    print(f"Avg Runtime per batch: {results[f'{resolution}_base']['runtime']*1000:.2f} ms")
+                if 'model_size_mb' in results[f'{resolution}_base']:
+                    print(f"Model Size: {results[f'{resolution}_base']['model_size_mb']:.2f} MB")
+                if 'peak_memory_mb' in results[f'{resolution}_base']:
+                    print(f"Peak Memory Usage: {results[f'{resolution}_base']['peak_memory_mb']:.2f} MB")
+                if 'flops' in results[f'{resolution}_base']:
+                    print(f"FLOPs: {results[f'{resolution}_base']['flops']/1e9:.2f} GFLOPs")
     
     if verbose:
         print("\n" + "="*50)
@@ -98,19 +180,24 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
     if hasattr(model2, 'get_compression_stats') and verbose:
         stats = model2.get_compression_stats()
         print(f"\nModel sparsity: {stats['sparsity']:.2%}")
-        # # for dynamic quantization method, we need compare model size
-        # print(f"Original model size: {stats['original_size'] / (1024*1024):.2f} MB")
-        # print(f"Quantized model size: {stats['quantized_size'] / (1024*1024):.2f} MB")
-        # print(f"Compression ratio: {stats['compression_ratio']:.2%}")
     
     for resolution, loader in test_loaders.items():
         if verbose:
             print(f"\nResults on {resolution}x{resolution} resolution")
             print("-"*30)
-        results[f"{resolution}_compressed"] = evaluate_model(model2, loader, data_processor, device)
+        results[f"{resolution}_compressed"] = evaluate_model(model2, loader, data_processor, device,
+                                                          track_performance=track_performance)
         if verbose:
             print(f"L2 Loss: {results[f'{resolution}_compressed']['l2_loss']:.6f}")
-            print(f"H1 Loss: {results[f'{resolution}_compressed']['h1_loss']:.6f}")
+            if track_performance:
+                if 'runtime' in results[f'{resolution}_compressed']:
+                    print(f"Avg Runtime per batch: {results[f'{resolution}_compressed']['runtime']*1000:.2f} ms")
+                if 'model_size_mb' in results[f'{resolution}_compressed']:
+                    print(f"Model Size: {results[f'{resolution}_compressed']['model_size_mb']:.2f} MB")
+                if 'peak_memory_mb' in results[f'{resolution}_compressed']:
+                    print(f"Peak Memory Usage: {results[f'{resolution}_compressed']['peak_memory_mb']:.2f} MB")
+                if 'flops' in results[f'{resolution}_compressed']:
+                    print(f"FLOPs: {results[f'{resolution}_compressed']['flops']/1e9:.2f} GFLOPs")
     
     if verbose:
         print("\n" + "="*50)
@@ -123,6 +210,23 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
             base_results = results[f"{resolution}_base"]
             comp_results = results[f"{resolution}_compressed"]
             print(f"{resolution}x{resolution} - L2: {(comp_results['l2_loss']/base_results['l2_loss'] - 1)*100:.2f}%")
-            print(f"{resolution}x{resolution} - H1: {(comp_results['h1_loss']/base_results['h1_loss'] - 1)*100:.2f}%")
+            
+            # Performance comparison if tracking enabled
+            if track_performance:
+                if 'runtime' in base_results and 'runtime' in comp_results:
+                    speedup = base_results['runtime'] / comp_results['runtime']
+                    print(f"{resolution}x{resolution} - Runtime Speedup: {speedup:.2f}x")
+                
+                if 'model_size_mb' in base_results and 'model_size_mb' in comp_results:
+                    model_size_reduction = (1 - comp_results['model_size_mb'] / base_results['model_size_mb']) * 100
+                    print(f"{resolution}x{resolution} - Model Size Reduction: {model_size_reduction:.2f}%")
+                
+                if 'peak_memory_mb' in base_results and 'peak_memory_mb' in comp_results:
+                    memory_reduction = (1 - comp_results['peak_memory_mb'] / base_results['peak_memory_mb']) * 100
+                    print(f"{resolution}x{resolution} - Peak Memory Reduction: {memory_reduction:.2f}%")
+                
+                if 'flops' in base_results and 'flops' in comp_results:
+                    flops_reduction = (1 - comp_results['flops'] / base_results['flops']) * 100
+                    print(f"{resolution}x{resolution} - FLOPs Reduction: {flops_reduction:.2f}%")
     
     return results

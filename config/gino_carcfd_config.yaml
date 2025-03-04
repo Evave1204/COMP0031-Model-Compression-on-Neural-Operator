@@ -14,7 +14,7 @@ cfd: &CFD
 
   # Dataset related
   data:
-    root: /cs/student/projects1/2022/chenghon/COMP0031-Model-Compression-on-Neural-Operator/neuralop/data/datasets/data
+    root: /cs/student/projects1/2022/mbravans/neuraloperator/neuralop/data/datasets/data
     sdf_query_resolution: 32
     n_train: 500
     n_test: 111
@@ -41,19 +41,18 @@ cfd: &CFD
     fno_channel_mlp_expansion: 1.0
     fno_resolution_scaling_factor: 1
 
+
   opt:
-    n_epochs: 40
-    learning_rate: 1e-3
-    training_loss: 'l2' 
+    n_epochs: 100
+    learning_rate: 5e-4
+    training_loss: 'l2'
     testing_loss: 'l2' 
-    weight_decay: 1e-4
+    weight_decay: 1e-5
     amp_autocast: False
 
-    scheduler_T_max: 500 # For cosine only, typically take n_epochs
-    scheduler_patience: 5 # For ReduceLROnPlateau only
-    scheduler: 'StepLR' # Or 'CosineAnnealingLR' OR 'ReduceLROnPlateau'
-    step_size: 50
-    gamma: 0.5
+    scheduler_T_max: 100
+    scheduler: 'CosineAnnealingLR'
+    eta_min: 1e-6
 
   # Weights and biases
   wandb:

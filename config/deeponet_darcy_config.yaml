@@ -3,11 +3,11 @@ default:
   arch: 'deeponet'
 
   data:
-    n_train: 4000
+    n_train: 10000
     batch_size: 16
     test_resolutions: [128]
-    n_tests: [200]
-    test_batch_sizes: [16, 16, 16]
+    n_tests: [1000]
+    test_batch_sizes: [16]
     train_resolution: 128
 
   deeponet:
@@ -24,17 +24,15 @@ default:
     dropout: 0.0
 
   opt:
-    n_epochs: 40
-    learning_rate: 1e-3
+    n_epochs: 100
+    learning_rate: 5e-4
     training_loss: 'l2'
-    weight_decay: 1e-4
+    weight_decay: 1e-5
     amp_autocast: False
 
-    scheduler_T_max: 500
-    scheduler_patience: 5 # For ReduceLROnPlateau only
-    scheduler: 'StepLR' # Or 'CosineAnnealingLR' OR 'ReduceLROnPlateau'
-    step_size: 60
-    gamma: 0.5
+    scheduler_T_max: 100
+    scheduler: 'CosineAnnealingLR'
+    eta_min: 1e-6
 
   wandb:
     log: true

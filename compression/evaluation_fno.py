@@ -25,17 +25,17 @@ fno_model = FNO(
     dropout=0.0)
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-02-05-19-55.pt", weights_only=False))
+fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt", weights_only=False))
 fno_model.eval()
 fno_model = fno_model.to(device)
 
 
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
-    n_train=1000,
+    n_train=100,
     batch_size=16,
-    test_resolutions=[16, 32],
-    n_tests=[100, 50],
-    test_batch_sizes=[16, 16],
+    test_resolutions=[128],
+    n_tests=[10000],
+    test_batch_sizes=[1],
     encode_input=False, 
     encode_output=False,
 )
@@ -81,7 +81,8 @@ compare_models(
     model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device=device
+    device=device,
+    track_performance = True
 )
 
 

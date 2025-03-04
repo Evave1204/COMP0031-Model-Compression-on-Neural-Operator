@@ -62,7 +62,6 @@ data_processor = CODANODataProcessor(
     out_normalizer=data_processor.out_normalizer
 )
 
-
 ###################################################
 # Global Magnitude Pruning  
 ###################################################
@@ -72,7 +71,6 @@ pruned_model = CompressedModel(
     create_replica=True
 )
 pruned_model = pruned_model.to(device)
-
 
 #####################################
 # SVD Low-Rank Decomposition 
@@ -85,23 +83,32 @@ lowrank_model = CompressedModel(
 )
 lowrank_model = lowrank_model.to(device)
 
-
-
-
-###################################################
-# Dynamic Quantization (Post-Training)  
-###################################################
+#####################################
+# Quant
+#####################################
 dynamic_quant_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: DynamicQuantization(model),
     create_replica=True
 )
-
-# If you want CPU inference for dynamic quant
-dynamic_quant_model = dynamic_quant_model.to('cpu')
+dynamic_quant_model = dynamic_quant_model.to(device)
 
 
 
+# Start Compression ..
+
+print("\n"*2)
+print("Pruning.....")
+compare_models(
+    model1=fno_model,
+    model2=pruned_model,
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device
+)
+
+print("\n"*2)
+print("Low Ranking.....")
 compare_models(
     model1=fno_model,
     model2=lowrank_model,
@@ -110,15 +117,8 @@ compare_models(
     device=device
 )
 
-# # Compare original fno_model to the static_quantized_model
-# compare_models(
-#     model1=fno_model,
-#     model2=quantized_model,
-#     test_loaders=test_loaders,
-#     data_processor=data_processor,
-#     device='cpu'
-# )
-
+print("\n"*2)
+print("Dynamic Quantization.....")
 compare_models(
     model1=fno_model,               # can remain on CPU or GPU, but if device='cpu', it moves it
     model2=dynamic_quant_model,     # this is dynamic quant model on CPU

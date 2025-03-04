@@ -151,6 +151,7 @@ class SVDLowRank:
             with torch.no_grad():
                 new_layer.weight1 = nn.Parameter(weight1.clone(), requires_grad=True)
                 new_layer.weight2 = nn.Parameter(weight2.clone(), requires_grad=True)
+                new_layer.bias = layer.bias
             self.compressed_layers[name] = new_layer
 
 

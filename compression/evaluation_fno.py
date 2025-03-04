@@ -10,10 +10,10 @@ from compression.utils import evaluate_model, compare_models
 fno_model = FNO(
     in_channels=1,
     out_channels=1,
-    n_modes=(16, 16),
-    hidden_channels=32,
+    n_modes=(32, 32),
+    hidden_channels=64,
     projection_channel_ratio=2,
-    n_layers=4,
+    n_layers=5,
     skip="linear",
     norm="group_norm",
     implementation="factorized",

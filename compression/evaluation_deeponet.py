@@ -6,6 +6,7 @@ from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
+from compression.quantization.dynamic_quantization import DynamicQuantization
 
 deeponet_model = DeepONet(
     train_resolution=128,
@@ -34,6 +35,7 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_input=False, 
     encode_output=False,
 )
+'''
 
 pruned_model = CompressedModel(
     model=deeponet_model,
@@ -77,6 +79,18 @@ compare_models(
     device=device
 )
 
+'''
+
+# ---- Dynamic Quantization Compression ----
+dynamic_quant_model = CompressedModel(
+    model=deeponet_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+# For dynamic quantization, inference must occur on CPU.
+dynamic_quant_model = dynamic_quant_model.to('cpu')
+
+# Evaluate both models on CPU
 print("\n"*2)
 print("Dynamic Quantization.....")
 compare_models(

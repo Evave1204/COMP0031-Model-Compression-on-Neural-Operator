@@ -2,7 +2,16 @@ import torch
 import torch.nn as nn
 from typing import Dict, Union, List
 
-
+# Helper function to compute the total memory footprint (in bytes) of a model.
+def get_model_size(model: nn.Module) -> int:
+    total_size = 0
+    # Sum the sizes of all parameters
+    for param in model.parameters():
+        total_size += param.nelement() * param.element_size()
+    # Sum the sizes of all buffers (e.g., our quantized int8 buffers)
+    for buffer in model.buffers():
+        total_size += buffer.nelement() * buffer.element_size()
+    return total_size
 
 class QuantizedLinear(nn.Module):
     '''

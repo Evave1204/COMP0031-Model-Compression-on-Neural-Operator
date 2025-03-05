@@ -35,7 +35,7 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_input=False, 
     encode_output=False,
 )
-'''
+
 
 pruned_model = CompressedModel(
     model=deeponet_model,
@@ -46,8 +46,14 @@ pruned_model = pruned_model.to(device)
 
 lowrank_model = CompressedModel(
     model=deeponet_model,
-    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.5,
-                                                 min_rank=4, max_rank=128),
+    compression_technique=lambda model: SVDLowRank(model, 
+                                                   rank_ratio=0.5, # option = [0.2, 0.4, 0.6, 0.8]
+                                                   min_rank=128, # for deeponet, its important to set min_rank to be higher
+                                                   max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                   is_full_rank=False,
+                                                   is_compress_conv1d=False,
+                                                   is_compress_FC=True,
+                                                   is_comrpess_spectral=False),
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)
@@ -58,6 +64,8 @@ dynamic_quant_model = CompressedModel(
     create_replica=True
 )
 dynamic_quant_model = dynamic_quant_model.to(device)
+
+
 
 print("\n"*2)
 print("Pruning.....")
@@ -76,19 +84,10 @@ compare_models(
     model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device=device
+    device=device,
+    track_performance = True
 )
 
-'''
-
-# ---- Dynamic Quantization Compression ----
-dynamic_quant_model = CompressedModel(
-    model=deeponet_model,
-    compression_technique=lambda model: DynamicQuantization(model),
-    create_replica=True
-)
-# For dynamic quantization, inference must occur on CPU.
-dynamic_quant_model = dynamic_quant_model.to('cpu')
 
 # Evaluate both models on CPU
 print("\n"*2)

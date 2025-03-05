@@ -2,6 +2,7 @@ from neuralop import get_model
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
+from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.base import CompressedModel
 from neuralop.data.datasets import CarCFDDataset
 from compression.utils import evaluate_model, compare_models
@@ -52,6 +53,20 @@ lowrank_model = lowrank_model.to(device)
 compare_models(
     model1=gino_model,
     model2=pruned_model,
+    test_loaders={'test': test_loader},
+    data_processor=data_processor,
+    device=device
+)
+
+quantised_model = CompressedModel(
+    model=gino_model,
+    compression_technique=lambda model: UniformQuantisation(model, num_bits=8),
+    create_replica=True
+)
+print("Quantising.....")
+compare_models(
+    model1=gino_model,
+    model2=quantised_model,
     test_loaders={'test': test_loader},
     data_processor=data_processor,
     device=device

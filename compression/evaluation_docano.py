@@ -2,6 +2,7 @@ from neuralop.models import CODANO
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
+from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
@@ -74,6 +75,20 @@ lowrank_model = lowrank_model.to(device)
 compare_models(
     model1=fno_model,
     model2=lowrank_model,
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device
+)
+
+quantised_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: UniformQuantisation(model, num_bits=8),
+    create_replica=True
+)
+print("Quantising.....")
+compare_models(
+    model1=fno_model,
+    model2=quantised_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device

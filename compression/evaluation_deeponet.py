@@ -2,6 +2,7 @@ from neuralop.models import DeepONet
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
+from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
@@ -49,6 +50,12 @@ lowrank_model = CompressedModel(
 )
 lowrank_model = lowrank_model.to(device)
 
+quantised_model = CompressedModel(
+    model=deeponet_model,
+    compression_technique=lambda model: UniformQuantisation(model, num_bits=8),
+    create_replica=True
+)
+
 print("Pruning.....")
 compare_models(
     model1=deeponet_model,
@@ -62,6 +69,15 @@ print("Low Ranking.....")
 compare_models(
     model1=deeponet_model,
     model2=lowrank_model,
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device
+)
+
+print("Quantising.....")
+compare_models(
+    model1=deeponet_model,
+    model2=quantised_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device

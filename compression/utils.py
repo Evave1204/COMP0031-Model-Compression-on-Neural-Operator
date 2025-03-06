@@ -1,6 +1,8 @@
 import torch
 import time
 from neuralop.losses import LpLoss, H1Loss
+from neuralop.models import FNO
+from neuralop.data.datasets import load_darcy_flow_small
 from fvcore.nn import FlopCountAnalysis
 from ptflops import get_model_complexity_info
 
@@ -230,3 +232,68 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
                     print(f"{resolution}x{resolution} - FLOPs Reduction: {flops_reduction:.2f}%")
     
     return results
+
+
+def optional_fno(resolution):
+    # Low resolution FNO
+    if resolution == "low":
+        fno_model = FNO(
+            in_channels=1,
+            out_channels=1,
+            n_modes=(16, 16),
+            hidden_channels=32,
+            projection_channel_ratio=2,
+            n_layers=4,
+            skip="linear",
+            norm="group_norm",
+            implementation="factorized",
+            separable=False,
+            factorization=None,
+            rank=1.0,
+            domain_padding=None,
+            stabilizer=None,
+            dropout=0.0)
+        fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-02-05-19-55.pt", weights_only=False))
+        fno_model.eval()    
+        train_loader, test_loaders, data_processor = load_darcy_flow_small(
+            n_train=1000,
+            batch_size=16,
+            test_resolutions=[16, 32],
+            n_tests=[100, 50],
+            test_batch_sizes=[16, 16],
+            encode_input=False, 
+            encode_output=False,
+        )
+        return fno_model, train_loader, test_loaders, data_processor
+    
+    elif resolution == "high":
+        fno_model = FNO(
+        in_channels=1,
+        out_channels=1,
+        n_modes=(32, 32),
+        hidden_channels=64,
+        projection_channel_ratio=2,
+        n_layers=5,
+        skip="linear",
+        norm="group_norm",
+        implementation="factorized",
+        separable=False,
+        factorization=None,
+        rank=1.0,
+        domain_padding=None,
+        stabilizer=None,
+        dropout=0.0)
+
+        fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt", weights_only=False))
+        fno_model.eval()
+
+        train_loader, test_loaders, data_processor = load_darcy_flow_small(
+            n_train=100,
+            batch_size=16,
+            test_resolutions=[128],
+            n_tests=[10000],
+            test_batch_sizes=[1],
+            encode_input=True, 
+            encode_output=True,
+        )
+        return fno_model, train_loader, test_loaders, data_processor

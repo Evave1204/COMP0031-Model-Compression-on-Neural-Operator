@@ -8,8 +8,6 @@ from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 
-
-
 fno_model = CODANO(
     in_channels=1,
     output_variable_codimension=1,

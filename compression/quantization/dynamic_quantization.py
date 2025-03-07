@@ -38,8 +38,17 @@ class QuantizedLinear(nn.Module):
         If all values are zero (scale equals 0), we set it to 1.0 to avoid division by zero.
         '''
         # Instead of scaling by max(abs(weight)), scale to int8 range
+        #changes on 7 march start from here
+        # Compute min and max
+        w_min = linear.weight.data.min().item()
+        w_max = linear.weight.data.max().item()
+        '''
         int8_max = 127  # Max range for int8
         self.scale = linear.weight.data.abs().max().item() / int8_max
+        '''
+        # Compute scale using (max - min) / 256
+        self.scale = (w_max - w_min) / 256
+
         if self.scale == 0:
             self.scale = 1.0
         
@@ -54,8 +63,15 @@ class QuantizedLinear(nn.Module):
         The result is clamped to the valid int8 range (-128 to 127) and converted to int8.
         It is stored as a buffer (using register_buffer) so that it does not require gradients.
         '''
+        '''
         q_weight = (linear.weight.data / self.scale).round().clamp(-128, 127).to(torch.int8)
+        '''
+        # Quantize weight
+        q_weight = torch.round((linear.weight.data - w_min) / self.scale - 127).clamp(-127, 127).to(torch.int8)
         self.register_buffer('q_weight', q_weight)
+
+        # Store min for dequantization
+        self.register_buffer('w_min', torch.tensor(w_min, dtype=torch.float32))
 
         '''
         Purpose:
@@ -65,11 +81,22 @@ class QuantizedLinear(nn.Module):
         Quantizes and registers the bias as a buffer. If no bias exists, registers None.
         '''
         if self.has_bias:
+            '''
             self.bias_scale = linear.bias.data.abs().max().item()
+            '''
+
+            b_min = linear.bias.data.min().item()
+            b_max = linear.bias.data.max().item()
+            self.bias_scale = (b_max - b_min) / 256
+
             if self.bias_scale == 0:
                 self.bias_scale = 1.0
+            '''
             q_bias = (linear.bias.data / self.bias_scale).round().clamp(-128, 127).to(torch.int8)
+            '''
+            q_bias = torch.round((linear.bias.data - b_min) / self.bias_scale - 127).clamp(-127, 127).to(torch.int8)
             self.register_buffer('q_bias', q_bias)
+            self.register_buffer('b_min', torch.tensor(b_min, dtype=torch.float32))
         else:
             self.register_buffer('q_bias', None)
 
@@ -85,8 +112,13 @@ class QuantizedLinear(nn.Module):
     '''
     def forward(self, x):
         # Dequantize weight and bias on-the-fly
+        '''
         weight = self.q_weight.float() * self.scale
         bias = self.q_bias.float() * self.bias_scale if self.has_bias else None
+        '''
+        # Dequantize weight
+        weight = (self.q_weight.float() + 127) * self.scale + self.w_min
+        bias = (self.q_bias.float() + 127) * self.bias_scale + self.b_min if self.has_bias else None
         return nn.functional.linear(x, weight, bias)
 
 
@@ -126,23 +158,44 @@ class QuantizedConv1d(nn.Module):
         Explanation:
         Similar to QuantizedLinear: computes a scale factor and quantizes the weight to int8, storing it as a buffer.
         '''
+        '''
         int8_max = 127  # Max range for int8
         self.scale = conv.weight.data.abs().max().item() / int8_max
+        '''
+        w_min = conv.weight.data.min().item()
+        w_max = conv.weight.data.max().item()
+
+        # Ensure the scale is never zero (to avoid division errors)
+        self.scale = (w_max - w_min) / 256
         if self.scale == 0:
             self.scale = 1.0
+        '''    
         q_weight = (conv.weight.data / self.scale).round().clamp(-128, 127).to(torch.int8)
+        '''
+        q_weight = torch.round((conv.weight.data - w_min) / self.scale - 127).clamp(-127, 127).to(torch.int8)
         self.register_buffer('q_weight', q_weight)
+        self.register_buffer('w_min', torch.tensor(w_min, dtype=torch.float32))
 
         '''
         Purpose:
         Quantize and store the bias (if available) in a similar manner.
         '''
         if self.has_bias:
+            '''
             self.bias_scale = conv.bias.data.abs().max().item()
+            '''
+            b_min = conv.bias.data.min().item()
+            b_max = conv.bias.data.max().item()
+            self.bias_scale = (b_max - b_min) / 256
+
             if self.bias_scale == 0:
                 self.bias_scale = 1.0
+            '''
             q_bias = (conv.bias.data / self.bias_scale).round().clamp(-128, 127).to(torch.int8)
+            '''
+            q_bias = torch.round((conv.bias.data - b_min) / self.bias_scale - 127).clamp(-127, 127).to(torch.int8)
             self.register_buffer('q_bias', q_bias)
+            self.register_buffer('b_min', torch.tensor(b_min, dtype=torch.float32))
         else:
             self.register_buffer('q_bias', None)
     
@@ -156,8 +209,13 @@ class QuantizedConv1d(nn.Module):
     Performs the convolution using the dequantized values.
     '''
     def forward(self, x):
+        '''
         weight = self.q_weight.float() * self.scale
         bias = self.q_bias.float() * self.bias_scale if self.has_bias else None
+        '''
+        # Dequantize weight
+        weight = (self.q_weight.float() + 127) * self.scale + self.w_min
+        bias = (self.q_bias.float() + 127) * self.bias_scale + self.b_min if self.has_bias else None
         return nn.functional.conv1d(x, weight, bias, self.stride, self.padding, self.dilation, self.groups)
 
 
@@ -337,7 +395,7 @@ Returns these values along with the names of the compressed layers.
             "quantized_size": size_after,
             "compression_ratio": ratio,
             "sparsity": 1 - ratio,
-            "compressed_layers": list(self.compressed_layers.keys()),
+            "dyquantized_layers": list(self.compressed_layers.keys()),
         }
 
     def _get_model_size_in_bytes(self, model):

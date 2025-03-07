@@ -9,6 +9,7 @@ from configmypy import ConfigPipeline, YamlConfig
 from neuralop.data.transforms.data_processors import DataProcessor
 from copy import deepcopy
 from neuralop.data.transforms.gino_processor import GINOCFDDataProcessor
+from compression.quantization.dynamic_quantization import DynamicQuantization
 
 config_name = 'cfd'
 pipe = ConfigPipeline([YamlConfig('./gino_carcfd_config.yaml', config_name=config_name, config_folder='./config')])
@@ -53,6 +54,24 @@ compare_models(
     model1=gino_model,
     model2=pruned_model,
     test_loaders={'test': test_loader},
+    data_processor=data_processor,
+    device=device
+)
+
+
+dynamic_quant_model = CompressedModel(
+    model=gino_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+dynamic_quant_model = dynamic_quant_model.to(device)
+
+print("\n"*2)
+print("Dynamic Quantization.....")
+compare_models(
+    model1=gino_model,               # The original model (it will be moved to CPU in evaluate_model)
+    model2=dynamic_quant_model,     # The dynamically quantized model
+    test_loaders=test_loaders,
     data_processor=data_processor,
     device=device
 )

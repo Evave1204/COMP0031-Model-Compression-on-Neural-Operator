@@ -40,6 +40,8 @@ fno_model.eval()
 fno_model = fno_model.to(device)
 
 
+
+
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
     n_train=1000,
     batch_size=16,
@@ -122,6 +124,7 @@ compare_models(
     track_performance=True
 )
 
+
 print("\n"*2)
 print("Dynamic Quantization.....")
 compare_models(
@@ -129,5 +132,5 @@ compare_models(
     model2=dynamic_quant_model,     # this is dynamic quant model on CPU
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device='cpu'
+    device=device
 )

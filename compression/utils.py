@@ -186,6 +186,17 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
     if hasattr(model2, 'get_compression_stats') and verbose:
         stats = model2.get_compression_stats()
         print(f"\nModel sparsity: {stats['sparsity']:.2%}")
+
+        if 'original_size' in stats:
+            print(f"Original size: {stats['original_size']} bytes")
+        if 'quantized_size' in stats:
+            print(f"Quantized size: {stats['quantized_size']} bytes")
+        if 'compression_ratio' in stats:
+            print(f"Compression ratio: {stats['compression_ratio']:.2f}")
+        if 'dyquantized_layers' in stats:
+            print("Quantized layers:")
+            for layer_name in stats['dyquantized_layers']:
+                print(f" - {layer_name}")
     
     for resolution, loader in test_loaders.items():
         if verbose:

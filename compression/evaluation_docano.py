@@ -8,7 +8,6 @@ from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 
-
 fno_model = CODANO(
     in_channels=1,
     output_variable_codimension=1,
@@ -75,10 +74,17 @@ pruned_model = pruned_model.to(device)
 #####################################
 # SVD Low-Rank Decomposition 
 #####################################
+# there are only few layers can be factorized but after factorization, the loss increased a lot
+# low rank is not working on DOCANO
 lowrank_model = CompressedModel(
     model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
-                                                   min_rank=1, max_rank=16),
+    compression_technique=lambda model: SVDLowRank(model=model, 
+                                                   rank_ratio=0.6, # option = [0.2, 0.4, 0.6, 0.8]
+                                                   min_rank=1,
+                                                   max_rank=8, # option = [8, 16, 32, 64, 128, 256]
+                                                   is_compress_conv1d=True,
+                                                   is_compress_FC=False,
+                                                   is_comrpess_spectral=False), # no need to factorize spectral due to small
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)
@@ -114,7 +120,8 @@ compare_models(
     model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device=device
+    device=device,
+    track_performance=True
 )
 
 

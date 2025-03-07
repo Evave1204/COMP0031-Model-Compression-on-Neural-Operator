@@ -6,94 +6,34 @@ from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
+from utils import optional_fno
 
-
-# fno_model = FNO(
-#     in_channels=1,
-#     out_channels=1,
-#     n_modes=(16, 16),
-#     hidden_channels=32,
-#     projection_channel_ratio=2,
-#     n_layers=4,
-#     skip="linear",
-#     norm="group_norm",
-#     implementation="factorized",
-#     separable=False,
-#     factorization=None,
-#     rank=1.0,
-#     domain_padding=None,
-#     stabilizer=None,
-#     dropout=0.0)
-
-#helper fucntion get model size
-import torch.nn as nn
-def get_model_size(model: nn.Module) -> int:
-    total_size = 0
-    # Sum the sizes of all trainable parameters
-    for param in model.parameters():
-        total_size += param.nelement() * param.element_size()
-    # Sum the sizes of all registered buffers
-    for buffer in model.buffers():
-        total_size += buffer.nelement() * buffer.element_size()
-    return total_size
-
-fno_model = FNO(
-    in_channels=1,
-    out_channels=1,
-    n_modes=(32, 32),
-    hidden_channels=64,
-    projection_channel_ratio=2,
-    n_layers=5,
-    skip="linear",
-    norm="group_norm",
-    implementation="factorized",
-    separable=False,
-    factorization=None,
-    rank=1.0,
-    domain_padding=None,
-    stabilizer=None,
-    dropout=0.0)
-
+fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="high")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt", weights_only=False))
-fno_model.eval()
 fno_model = fno_model.to(device)
 
-# train_loader, test_loaders, data_processor = load_darcy_flow_small(
-#     n_train=1000,
-#     batch_size=16,
-#     test_resolutions=[16, 32],
-#     n_tests=[100, 50],
-#     test_batch_sizes=[16, 16],
-#     encode_input=False, 
-#     encode_output=False,
+
+# Initialize models 
+# pruned_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
+#     create_replica=True
 # )
-train_loader, test_loaders, data_processor = load_darcy_flow_small(
-    n_train=100,
-    batch_size=16,
-    test_resolutions=[128],
-    n_tests=[10000],
-    test_batch_sizes=[1],
-    encode_input=False, 
-    encode_output=False,
-)
+# pruned_model = pruned_model.to(device)
 
-'''
-pruned_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
-    create_replica=True
-)
-pruned_model = pruned_model.to(device)
+# lowrank_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: SVDLowRank(model, 
+#                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+#                                                    min_rank=16,
+#                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+#                                                    is_compress_conv1d=False,
+#                                                    is_compress_FC=False,
+#                                                    is_comrpess_spectral=True),
+#     create_replica=True
+# )
+# lowrank_model = lowrank_model.to(device)
 
-lowrank_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.5,
-                                                 min_rank=1, max_rank=8),
-    create_replica=True
-)
-lowrank_model = lowrank_model.to(device)
-'''
 dynamic_quant_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: DynamicQuantization(model),
@@ -103,28 +43,28 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 
 
 # Start Compression ..
-'''
-print("\n"*2)
-print("Pruning.....")
-compare_models(
-    model1=fno_model,
-    model2=pruned_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device
-)
 
-print("\n"*2)
-print("Low Ranking.....")
-compare_models(
-    model1=fno_model,
-    model2=lowrank_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device,
-    track_performance = True
-)
-'''
+# print("\n"*2)
+# print("Pruning.....")
+# compare_models(
+#     model1=fno_model,
+#     model2=pruned_model,
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device
+# )
+
+# print("\n"*2)
+# print("Low Ranking.....")
+# compare_models(
+#     model1=fno_model,
+#     model2=lowrank_model,
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device,
+#     track_performance = True
+# )
+
 
 print("\n"*2)
 print("Dynamic Quantization.....")

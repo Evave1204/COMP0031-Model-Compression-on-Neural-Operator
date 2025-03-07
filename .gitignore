@@ -1,5 +1,6 @@
 venv/
 models/
+!neuralop/models/
 # weights and biases
 .wandb/ 
 wandb_api_key.txt

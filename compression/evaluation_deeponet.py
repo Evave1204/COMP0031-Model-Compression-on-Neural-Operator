@@ -36,7 +36,7 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_output=False,
 )
 
-
+'''
 pruned_model = CompressedModel(
     model=deeponet_model,
     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
@@ -57,7 +57,7 @@ lowrank_model = CompressedModel(
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)
-
+'''
 dynamic_quant_model = CompressedModel(
     model=deeponet_model,
     compression_technique=lambda model: DynamicQuantization(model),
@@ -66,7 +66,7 @@ dynamic_quant_model = CompressedModel(
 dynamic_quant_model = dynamic_quant_model.to(device)
 
 
-
+'''
 print("\n"*2)
 print("Pruning.....")
 compare_models(
@@ -87,7 +87,7 @@ compare_models(
     device=device,
     track_performance = True
 )
-
+'''
 
 # Evaluate both models on CPU
 print("\n"*2)

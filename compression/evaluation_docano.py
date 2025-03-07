@@ -9,7 +9,6 @@ from compression.utils import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 
 
-
 fno_model = CODANO(
     in_channels=1,
     output_variable_codimension=1,
@@ -40,6 +39,8 @@ cpu_device = torch.device('cpu')
 fno_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt", weights_only=False))
 fno_model.eval()
 fno_model = fno_model.to(device)
+
+
 
 
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
@@ -116,6 +117,7 @@ compare_models(
     device=device
 )
 
+
 print("\n"*2)
 print("Dynamic Quantization.....")
 compare_models(
@@ -123,5 +125,5 @@ compare_models(
     model2=dynamic_quant_model,     # this is dynamic quant model on CPU
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device='cpu'
+    device=device
 )

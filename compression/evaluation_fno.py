@@ -25,6 +25,18 @@ from compression.utils import evaluate_model, compare_models
 #     stabilizer=None,
 #     dropout=0.0)
 
+#helper fucntion get model size
+import torch.nn as nn
+def get_model_size(model: nn.Module) -> int:
+    total_size = 0
+    # Sum the sizes of all trainable parameters
+    for param in model.parameters():
+        total_size += param.nelement() * param.element_size()
+    # Sum the sizes of all registered buffers
+    for buffer in model.buffers():
+        total_size += buffer.nelement() * buffer.element_size()
+    return total_size
+
 fno_model = FNO(
     in_channels=1,
     out_channels=1,
@@ -66,6 +78,7 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_output=False,
 )
 
+'''
 pruned_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
@@ -80,7 +93,7 @@ lowrank_model = CompressedModel(
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)
-
+'''
 dynamic_quant_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: DynamicQuantization(model),
@@ -90,7 +103,7 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 
 
 # Start Compression ..
-
+'''
 print("\n"*2)
 print("Pruning.....")
 compare_models(
@@ -111,6 +124,7 @@ compare_models(
     device=device,
     track_performance = True
 )
+'''
 
 print("\n"*2)
 print("Dynamic Quantization.....")
@@ -121,3 +135,5 @@ compare_models(
     data_processor=data_processor,
     device=device
 )
+
+

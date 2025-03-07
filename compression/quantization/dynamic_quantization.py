@@ -2,8 +2,9 @@ import torch
 import torch.nn as nn
 from typing import Dict, Union, List
 
+'''
 # Helper function to compute the total memory footprint (in bytes) of a model.
-def get_model_size(model: nn.Module) -> int:
+def _get_model_size_in_bytes(model: nn.Module) -> int:
     total_size = 0
     # Sum the sizes of all parameters
     for param in model.parameters():
@@ -12,7 +13,7 @@ def get_model_size(model: nn.Module) -> int:
     for buffer in model.buffers():
         total_size += buffer.nelement() * buffer.element_size()
     return total_size
-
+'''
 class QuantizedLinear(nn.Module):
     '''
     Purpose:
@@ -36,9 +37,12 @@ class QuantizedLinear(nn.Module):
         The scale is the maximum absolute value in the weight tensor.
         If all values are zero (scale equals 0), we set it to 1.0 to avoid division by zero.
         '''
-        self.scale = linear.weight.data.abs().max().item()
+        # Instead of scaling by max(abs(weight)), scale to int8 range
+        int8_max = 127  # Max range for int8
+        self.scale = linear.weight.data.abs().max().item() / int8_max
         if self.scale == 0:
             self.scale = 1.0
+        
 
 
         # Quantize weight to int8 and register as buffer
@@ -122,7 +126,8 @@ class QuantizedConv1d(nn.Module):
         Explanation:
         Similar to QuantizedLinear: computes a scale factor and quantizes the weight to int8, storing it as a buffer.
         '''
-        self.scale = conv.weight.data.abs().max().item()
+        int8_max = 127  # Max range for int8
+        self.scale = conv.weight.data.abs().max().item() / int8_max
         if self.scale == 0:
             self.scale = 1.0
         q_weight = (conv.weight.data / self.scale).round().clamp(-128, 127).to(torch.int8)
@@ -259,7 +264,12 @@ Replaces the original module in the model with the quantized version using repla
 Returns the modified model.
     '''
     def compress(self) -> nn.Module:
+        '''
         self.original_params = sum(p.numel() for p in self.model.parameters())
+        '''
+        # 1) Store float size (model before compression)
+        self.size_before = self._get_model_size_in_bytes(self.model)
+
         # Iterate over model modules and replace eligible ones with quantized wrappers.
         for name, module in self.model.named_modules():
             if isinstance(module, nn.Linear):
@@ -300,6 +310,8 @@ Computes a hypothetical quantized size if parameters were stored as int8 (1 byte
 Calculates a compression ratio and a simulated "sparsity" (1 - compression ratio).
 Returns these values along with the names of the compressed layers.
     '''
+
+    '''
     def get_compression_stats(self) -> Dict[str, Union[int, float, List[str]]]:
         # Assume float32: 4 bytes per parameter.
         original_size = self.original_params * 4
@@ -314,5 +326,25 @@ Returns these values along with the names of the compressed layers.
             "sparsity": sparsity,
             "compressed_layers": list(self.compressed_layers.keys()),
         }
+    '''
 
+    def get_compression_stats(self):
+        # 3) After compression, measure again
+        size_after = self._get_model_size_in_bytes(self.model)
+        ratio = size_after / self.size_before
+        return {
+            "original_size": self.size_before,
+            "quantized_size": size_after,
+            "compression_ratio": ratio,
+            "sparsity": 1 - ratio,
+            "compressed_layers": list(self.compressed_layers.keys()),
+        }
+
+    def _get_model_size_in_bytes(self, model):
+        total_size = 0
+        for p in model.parameters():
+            total_size += p.nelement() * p.element_size()
+        for b in model.buffers():
+            total_size += b.nelement() * b.element_size()
+        return total_size
 

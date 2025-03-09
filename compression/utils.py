@@ -522,7 +522,10 @@ def missing_variable_testing(
         loss_l1 = nn.L1Loss()
         t1 = default_timer()
         predictions = []
+        k = 1
         for data in test_loader:
+            print(k)
+            k+=1
             x, y = data['x'].cuda(), data['y'].cuda()
             static_features = data['static_features']
 
@@ -565,10 +568,7 @@ def missing_variable_testing(
     t2 = default_timer()
     avg_time = (t2 - t1) / ntest
 
-    wandb.log({'Augmented test_error_l2': test_l2}, commit=True)
-    wandb.log({'Augmented test_error_l1': test_l1}, commit=True)
-    wandb.log({'Avg test_time': avg_time}, commit=True)
     print(f"Augmented Test Error  {stage}: ", test_l2)
 
-    if hasattr(params, 'save_predictions') and params.save_predictions:
-        torch.save(predictions[:50], f'../xy/predictions_{params.config}.pt')
+    # if hasattr(params, 'save_predictions') and params.save_predictions:
+    #     torch.save(predictions[:50], f'../xy/predictions_{params.config}.pt')

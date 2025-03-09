@@ -17,76 +17,96 @@ from compression.base import CompressedModel
 from compression.utils import evaluate_model, compare_models, CodanoYParams
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 from compression.utils import missing_variable_testing
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--exp", nargs="?", default="FSI", type=str)
     parser.add_argument("--config", nargs="?", default="codano_gno_NS_ES", type=str)
-    parsed_args = parser.parse_args()
+    args = parser.parse_args()
 
-    if parsed_args.exp == "FSI":
+    if args.exp == "FSI":
         config_file = './config/ssl_ns_elastic.yaml'
-    elif parsed_args.exp == "RB":
+    elif args.exp == "RB":
         config_file = './config/RB_config.yaml'
     else:
         raise ValueError("Unknown experiment type")
 
-    config = parsed_args.config
-    print("Loading config", config)
-    params = CodanoYParams(config_file, config, print_params=False)
-    # params.pretrain_ssl = True
-    stage = StageEnum.RECONSTRUCTIVE
+    print("Loading config", args.config)
+    params = CodanoYParams(config_file, args.config, print_params=False)
+
     torch.manual_seed(params.random_seed)
     random.seed(params.random_seed)
     np.random.seed(params.random_seed)
+    params.config = args.config
 
-    # nettype -> transformer, grid_type -> non_uniform
-    # => ssl_model
-    # evaluation only
-    encoder, decoder, contrastive, predictor = get_ssl_models_codano_gino(params)
+    stage = StageEnum.PREDICTIVE
 
-    # set the variable encoder
     variable_encoder = None
     token_expander = None
+
+    encoder, decoder, contrastive, predictor = get_ssl_models_codano_gino(params)
     if params.use_variable_encoding:
         variable_encoder = get_variable_encoder(params)
         token_expander = TokenExpansion(
             sum([params.equation_dict[i] for i in params.equation_dict.keys()]),
-            params.n_encoding_channels,
-            params.n_static_channels,
+            params.n_encoding_channels, params.n_static_channels,
             params.grid_type == 'uniform'
         )
 
     model = SSLWrapper(params, encoder, decoder, contrastive, predictor, stage=stage)
 
-    if params.grid_type != 'uniform':
-        mesh = get_mesh(params)
-        input_mesh = torch.from_numpy(mesh).float().cuda()
-        model.set_initial_mesh(input_mesh)
+    print("Setting the Grid")
+    mesh = get_mesh(params)
+    input_mesh = torch.from_numpy(mesh).float().cuda()
+    model.set_initial_mesh(input_mesh)
 
-    # load the weights
     model.load_state_dict(torch.load("models/codano_whole_model_weights.pt"), strict=False)
-    model = model.cuda()
-    model.eval()
+    model = model.cuda().eval()
     if variable_encoder is not None:
-        variable_encoder = variable_encoder.cuda()
+        variable_encoder = variable_encoder.cuda().eval()
     if token_expander is not None:
-        token_expander = token_expander.cuda()
+        token_expander = token_expander.cuda().eval()
 
-    test_path = "neuralop/data/datasets/data/foundation_codano_test.pkl"
-    test_dataset, test_dataloader, metadata = load_test_set(test_path)
+    dataset = NsElasticDataset(
+        params.data_location,
+        equation=list(params.equation_dict.keys()),
+        mesh_location=params.input_mesh_location,
+        params=params
+    )
+    _, test_dataloader = dataset.get_dataloader(
+        params.mu_list, params.dt,
+        ntrain=params.get('ntrain'),
+        ntest=params.get('ntest'),
+        sample_per_inlet=params.sample_per_inlet
+    )
+
+    grid_non, grid_uni = get_meshes(params, params.grid_size)
+    test_augmenter = None
+    if getattr(params, 'missing_var_test', False):
+        from neuralop.data_utils.data_utils import MaskerNonuniformMesh
+        test_augmenter = MaskerNonuniformMesh(
+            grid_non_uni=grid_non.clone().detach(),
+            gird_uni=grid_uni.clone().detach(),
+            radius=params.masking_radius,
+            drop_type=params.drop_type,
+            drop_pix=params.drop_pix_val,
+            channel_aug_rate=params.channel_per_val,
+            channel_drop_rate=params.channel_drop_per_val,
+            verbose=True
+        )
 
     print("Evaluating model on test dataset...")
     missing_variable_testing(
         model,
         test_dataloader,
-        augmenter=None,
+        augmenter=test_augmenter,
         stage=stage,
         params=params,
         variable_encoder=variable_encoder,
         token_expander=token_expander,
         initial_mesh=input_mesh
     )
-
 
 '''
 ours

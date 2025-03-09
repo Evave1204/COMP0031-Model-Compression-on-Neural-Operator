@@ -130,22 +130,6 @@ class VariableEncodingIrregularMesh(nn.Module):
         grid_pe = torch.cat([grid_poits, pe], axis=1)
         var_encoding = self.var_encoder(grid_pe)
         return var_encoding
-    
-        # can make it work... but...
-        # B, N, d = grid_poits.shape
-
-        # grid_flat = grid_poits.view(B * N, d)
-        # pe = self.PE(grid_flat)  # 得到 [B*N, p]
-        
-        # p = pe.shape[1]
-        # pe = pe.view(B, N, p)
-        
-        # grid_pe = torch.cat([grid_poits, pe], dim=-1)  # 结果形状为 [B, N, d+p]
-
-        # var_encoding = self.var_encoder(grid_pe)
-        
-        # return var_encoding
-
 
 class VariableEncodingWrapper(nn.Module):
     def __init__(

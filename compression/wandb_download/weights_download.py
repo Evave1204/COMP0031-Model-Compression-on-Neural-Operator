@@ -11,15 +11,19 @@ artifacts = [
     # "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-02-05-16-07:v0",
     # "ucl-neural-operator/training/model-deeponet-darcy-128-resolution-2025-02-19-22-23:v0",
     # Darcy 128
-    "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-04-18-48:v0",
-    "ucl-neural-operator/training/model-deeponet-darcy-128-resolution-2025-03-04-18-53:v0",
-    "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-03-04-20-01:v0",
+    # "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-04-18-48:v0",
+    # "ucl-neural-operator/training/model-deeponet-darcy-128-resolution-2025-03-04-18-53:v0",
+    # "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-03-04-20-01:v0",
+    'ucl-neural-operator/data/foundational-codano-weights:v0', # foundational codano weights
+    #'ucl-neural-operator/data/foundational-fno-weights:v0' # foundational fno weights
+
 ]
 
 run = wandb.init()
 
 for artifact_name in artifacts:
-    artifact = run.use_artifact(artifact_name, type="model")
+    artifact = run.use_artifact(artifact_name, type="weights")
+    #artifact = run.use_artifact(artifact_name, type="model")
     artifact_dir = artifact.download(root=models_dir)
     print(f"Downloaded {artifact_name} to {artifact_dir}")
 

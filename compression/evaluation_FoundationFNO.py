@@ -4,7 +4,7 @@ from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
-from compression.utils import YParams
+from compression.utils import FNOYParams
 from neuralop.data.datasets.mixed import get_data_loader
 from compression.utils import evaluate_model, compare_models
 import os, sys, time
@@ -21,7 +21,7 @@ parser.add_argument("--root_dir", default='./', type=str, help='root dir to stor
 parser.add_argument("--run_num", default='0', type=str, help='sub run config')
 parser.add_argument("--sweep_id", default=None, type=str, help='sweep config from ./configs/sweeps.yaml')
 args = parser.parse_args()
-params = YParams(os.path.abspath(args.yaml_config), args.config, print_params=False)
+params = FNOYParams(os.path.abspath(args.yaml_config), args.config, print_params=False)
 if dist.is_initialized():
     dist.barrier()
 logging.info('DONE')

@@ -178,7 +178,7 @@ codano_gno_NS_ES: &CODANO_GNO_NS_ES
     <<: *CODANO_GNO
     equation_dict: { "NS": 3 , "ES": 2}
     input_mesh_location: "neuralop/data/datasets/data/mesh.h5"
-    data_location: "neuralop/data/datasets/data/"
+    data_location: "neuralop/data/datasets/data/foundation_codano_test.pt"
     mu_list: [1.0, 10.0]
     dt: 2
     radius: 0.05

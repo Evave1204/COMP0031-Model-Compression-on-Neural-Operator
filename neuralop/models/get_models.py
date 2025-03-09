@@ -7,20 +7,20 @@ import torch
 from torch import nn
 from neuralop.layers.u_net_sublayer import UNet2d
 from neuralop.utils import *
-from neuralop.layers.fno_block import FNOBlocks
-from neuralop.models import FNO
+from neuralop.layers.foundation_codano_fno_block import FNOBlocks
+from neuralop.models.foundation_codano_fno import FNO
 from neuralop.layers.codano_block_nd import CodanoBlockND
 from neuralop.data_utils.data_utils import MaskerNonuniformMesh, MaskerUniform, batched_masker
 from neuralop.layers.codano_block_2D import *
 from neuralop.layers.fino_2D import SpectralConvKernel2d
 from neuralop.layers.fino_nd import SpectralConvKernel2d as SPCONV
-from neuralop.models.codano import CodANO, VariableEncodingArgs
-from neuralop.models.codano_gino import CondnoGino
-from neuralop.models.fno_gino import FnoGno
-from neuralop.models.gnn import GNN
-from neuralop.models.deeponet import DeepONet
-from neuralop.models.vit import VitGno
-from neuralop.models.unet import UnetGno
+from neuralop.models.foundation_codano_codano import CodANO, VariableEncodingArgs
+from neuralop.models.foundation_codano_codano_gino import CondnoGino
+# from neuralop.models.fno_gino import FnoGno
+# from neuralop.models.gnn import GNN
+# from neuralop.models.deeponet import DeepONet
+# from neuralop.models.vit import VitGno
+# from neuralop.models.unet import UnetGno
 
 # Uniform Codano
 
@@ -288,168 +288,6 @@ def get_ssl_models_codano_gino(params):
     return encoder, decoder, contrastive, predictor
 
 
-'''
-Following is for getting all the baselines
-'''
-def get_baseline_model(params):
-    if params.grid_type == 'uniform':
-        '''
-        Models for uniform grid
-        '''
-        if params.nettype == 'fno':
-            model = FNO(
-                n_modes=params.n_modes,
-                max_n_modes=params.max_n_modes,
-                hidden_channels=params.hidden_dim,
-                in_channels=params.in_dim,
-                out_channels=params.out_dim,
-                lifting_channels=params.lifting_dim,
-                projection_channels=params.projection_dim,
-                n_layers=params.n_layers,
-            )
-        elif params.nettype == 'unet':
-            model = UNet2d(in_channels=params.in_dim,
-                           out_channels=params.out_dim,
-                           init_features=params.init_features,
-                           )
-        elif params.nettype == 'deeponet':
-            raise (Exception('Not Implemented'))
-
-        return model
-
-    else:
-        if params.input_mesh_location is not None:
-            mesh = get_mesh(params.input_mesh_location)
-            input_mesh = torch.from_numpy(mesh).type(torch.float).cuda()
-
-            minx, maxx = np.min(mesh[:, 0]), np.max(mesh[:, 0])
-            miny, maxy = np.min(mesh[:, 1]), np.max(mesh[:, 1])
-
-            size_x, size_y = params.grid_size
-            idx_x = torch.arange(start=minx,
-                                 end=maxx + (maxx - minx) / size_x - 1e-5,
-                                 step=(maxx - minx) / (size_x - 1))
-            idx_y = torch.arange(start=miny,
-                                 end=maxy + (maxy - miny) / size_y - 1e-5,
-                                 step=(maxy - miny) / (size_y - 1))
-            x, y = torch.meshgrid(idx_x, idx_y, indexing='ij')
-            output_mesh = torch.transpose(
-                torch.stack([x.flatten(), y.flatten()]),
-                dim0=0,
-                dim1=1,
-            ).type(torch.float).cuda()
-
-            assert x.shape[0] == size_x
-            assert x.shape[1] == size_y
-
-            # General modules of FNO blocks and
-            # integral operators
-            block = FNOBlocks
-            if params.tno_integral_op == 'fno':
-                int_op = partial(SpectralConvKernel2d,
-                                 transform_type=params.transform_type,
-                                 frequency_mixer=False)
-            elif params.tno_integral_op == 'fino':
-                int_op = partial(SpectralConvKernel2d,
-                                 transform_type=params.transform_type)
-            else:
-                raise (Exception('Int. Op. Not found'))
-            
-            in_dim = params.in_dim + params.n_static_channels
-
-            if params.nettype == 'gnn':
-                print("Generating GNN")
-                model = GNN(
-                    in_dim,
-                    params.out_dim,
-                    input_grid=input_mesh,
-                    output_grid=output_mesh,
-                    n_neigbor=params.n_neigbor,
-                    gno_mlp_layers=params.gno_mlp_layers,
-                    hidden_dim=params.hidden_dim,
-                    lifting_dim=params.lifting_dim,
-                    initial_mesh=input_mesh,
-                    n_layers=params.n_layers,
-                    lifting=True,
-                    projection=True,
-                )
-            elif params.nettype == 'deeponet':
-                model = DeepONet(
-                    in_dim,
-                    params.out_dim,
-                    input_grid=input_mesh,
-                    output_grid=output_mesh,
-                    branch_layers=params.branch_layers,
-                    trunk_layers=params.trunk_layers,
-                    initial_mesh=input_mesh,
-                    n_neigbor=params.n_neigbor,
-                    gno_mlp_layers=params.gno_mlp_layers,
-                )
-            elif params.nettype == 'vit':
-                model = VitGno(
-                    in_dim,
-                    params.out_dim,
-                    input_grid=input_mesh,
-                    output_grid=output_mesh,
-                    radius=params.radius,
-                    gno_mlp_layers=params.gno_mlp_layers,
-                    hidden_dim=params.hidden_dim,
-                    lifting_dim=params.lifting_dim,
-                    n_layers=params.n_layers,
-                    grid_size=tuple(params.grid_size),
-                    patch_size=tuple(params.patch_size),
-                    heads=params.heads,
-                    initial_mesh=input_mesh,
-                    lifting=True,
-                    projection=True,
-                    re_grid_input=False,
-                )
-            elif params.nettype == 'unet':
-                model = UnetGno(
-                    in_dim=params.in_dim,
-                    out_dim=params.out_dim,
-                    input_grid=params.input_mesh,
-                    output_grid=params.output_mesh,
-                    grid_size=tuple(params.grid_size),
-                    radius=params.radius,
-                    gno_mlp_layers=params.gno_mlp_layers,
-                    hidden_dim=params.hidden_dim,
-                    lifting_dim=params.lifting_dim,
-                    n_layers=params.n_layers,
-                    pad_to_size=params.pad_to_size,
-                    initial_mesh=None,
-                    lifting=False,
-                    projection=False,
-                    re_grid_input=False,
-                )
-            else:
-                model = FnoGno(
-                    in_dim=params.in_dim,
-                    out_dim=params.out_dim,
-                    input_grid=input_mesh,
-                    output_grid=output_mesh,
-                    radius=params.radius,
-                    gno_mlp_layers=params.gno_mlp_layers,
-                    grid_size=params.grid_size,
-                    hidden_dim=params.hidden_dim,
-                    lifting_dim=params.lifting_dim,
-                    n_layers=params.n_layers,
-                    max_n_modes=params.max_n_modes,
-                    n_modes=params.n_modes,
-                    scalings=params.scalings,
-                    initial_mesh=input_mesh,
-                    lifting=True,
-                    projection=True,
-                    operator_block=block,
-                    re_grid_input=False,
-                    integral_operator=int_op,
-                    integral_operator_top=int_op,
-                    integral_operator_bottom=int_op,
-                )
-            return model
-        else:
-            raise (Exception('Input mesh location not provided'))
-
 
 class StageEnum(enum.Enum):
     RECONSTRUCTIVE = "RECONSTRUCTIVE"
@@ -538,6 +376,7 @@ class SSLWrapper(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        y,
         out_grid_displacement=None,
         in_grid_displacement=None
     ):

@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from torch import nn
 import torch_harmonics as th
-from neuralop.layers.spectral_convolution import SpectralConv
+from neuralop.layers.foundation_codano_spectral_convolution import SpectralConv
 
 
 class SpectralConvKernel1d(SpectralConv):

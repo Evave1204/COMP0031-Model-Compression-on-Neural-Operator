@@ -1,5 +1,5 @@
 from neuralop.baseline_utils.rigid_neighbor import FixedNeighborSearch
-from neuralop.layers.integral_transform import IntegralTransform
+from neuralop.layers.foundation_codano_integral_transform import IntegralTransform
 from neuralop.layers.mlp import MLPLinear
 import torch.nn as nn
 import torch.nn.functional as F

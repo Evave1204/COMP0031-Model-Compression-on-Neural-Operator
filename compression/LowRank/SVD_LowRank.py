@@ -206,7 +206,6 @@ class SVDLowRank:
         - SpectralConv (DenseTensor) is approximated using low-rank SVD.
         """
         self.original_params = sum(p.numel() for p in self.model.parameters())
-        print(self.model)
         for name, module in self.model.named_modules():
             # Handle Conv1d (kernel_size=1)
             if self.is_compress_conv1d and isinstance(module, nn.Conv1d): #and module.kernel_size == (1,):

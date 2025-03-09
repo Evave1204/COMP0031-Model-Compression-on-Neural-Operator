@@ -254,9 +254,10 @@ def prepare_input(
                                  static_features.cuda())
         elif params.grid_type == 'non uniform':
             initial_mesh = initial_mesh.cuda()
-            equation = [i[0] for i in data['equation']]
+            #quation = [i[0] for i in data['equation']]
+            equation = [i[0] if isinstance(i[0], str) else i[0][0] for i in data['equation']]
             inp = token_expander(
-                x,
+                x, 
                 variable_encoder(
                     initial_mesh +
                     data['d_grid_x'].cuda()[0],

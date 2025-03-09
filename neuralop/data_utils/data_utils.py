@@ -2,7 +2,7 @@ import math
 import random
 import sys
 from typing import Optional, Tuple
-from utils import *
+from neuralop.utils import *
 import numpy as np
 import torch
 import torch.nn.functional as F

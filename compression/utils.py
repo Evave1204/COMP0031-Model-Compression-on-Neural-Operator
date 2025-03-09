@@ -7,7 +7,18 @@ from fvcore.nn import FlopCountAnalysis
 from ptflops import get_model_complexity_info
 import pprint
 
-def evaluate_model(model, dataloader, data_processor, device='cuda', track_performance=False, verbose=False):
+from neuralop.data_utils.data_utils import *
+import torch.nn as nn
+from timeit import default_timer
+from neuralop.models.get_models import *
+from tqdm import tqdm
+import wandb
+from utils import *
+# from train.trainer import *
+
+
+def evaluate_model(model, dataloader, data_processor, 
+                   device='cuda', track_performance=False, verbose=False, evaluation_params=None):
     """
     Evaluates model performance with optional tracking of runtime, memory usage, and FLOPs.
     
@@ -73,7 +84,24 @@ def evaluate_model(model, dataloader, data_processor, device='cuda', track_perfo
 
                 processed_data = {k: v.to(device)
                                   for k, v in batch.items() if torch.is_tensor(v)}
-            
+            if evaluation_params is not None:
+                variable_encoder = evaluation_params["variable_encoder"]
+                token_expander = evaluation_params["token_expander"]
+                initial_mesh = evaluation_params["input_mesh"]
+                initial_params = evaluation_params["params"]
+                stage = evaluation_params["stage"]
+                inp = prepare_input(batch["x"], 
+                                    batch["static_features"],
+                                    initial_params,
+                                    variable_encoder,
+                                    token_expander,
+                                    initial_mesh,
+                                    batch)
+                out_grid_displacement, in_grid_displacement = get_grid_displacement(
+                params, stage, batch)
+                processed_data = {"x": inp, "y":batch["y"], 
+                                  "out_grid_displacement":out_grid_displacement,
+                                  "in_grid_displacement":in_grid_displacement}
             # Measure FLOPs on first batch only using ptflops
             if track_performance and not flops_counted:
                 try:
@@ -100,6 +128,7 @@ def evaluate_model(model, dataloader, data_processor, device='cuda', track_perfo
             # Track runtime
             if track_performance:
                 start_time = time.time()
+
 
             out = model(**processed_data)
             
@@ -140,7 +169,7 @@ def evaluate_model(model, dataloader, data_processor, device='cuda', track_perfo
 
 def compare_models(model1, model2, test_loaders, data_processor, device, 
                   model1_name="Original Model", model2_name="Compressed Model",
-                  verbose=True, track_performance=False):
+                  verbose=True, track_performance=False, evaluation_params=None):
     """Compare performance between two models across different resolutions.
     
     Args:
@@ -166,7 +195,8 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
             print(f"\nResults on {resolution}x{resolution} resolution")
             print("-"*30)
         results[f"{resolution}_base"] = evaluate_model(model1, loader, data_processor, device, 
-                                                     track_performance=track_performance)
+                                                     track_performance=track_performance, 
+                                                     evaluation_params=evaluation_params)
         if verbose:
             print(f"L2 Loss: {results[f'{resolution}_base']['l2_loss']:.6f}")
             if track_performance:
@@ -447,3 +477,98 @@ class CodanoYParams(ParamsBase):
             logging.info(str(key) + ' ' + str(val))
         logging.info("---------------------------------------------------")
 
+# from codano trainer
+def get_grid_displacement(params, stage, data):
+    if params.grid_type == "non uniform":
+        with torch.no_grad():
+            if stage == StageEnum.RECONSTRUCTIVE:
+                out_grid_displacement = data['d_grid_x'].cuda()[0]
+                in_grid_displacement = data['d_grid_x'].cuda()[0]
+            else:
+                out_grid_displacement = data['d_grid_y'].cuda()[0]
+                in_grid_displacement = data['d_grid_x'].cuda()[0]
+    else:
+        out_grid_displacement = None
+        in_grid_displacement = None
+    return out_grid_displacement, in_grid_displacement
+
+# codano evaluation
+import torch
+from neuralop.data_utils.data_utils import *
+import torch.nn as nn
+from timeit import default_timer
+from neuralop.models.get_models import *
+from tqdm import tqdm
+import wandb
+from utils import *
+
+def missing_variable_testing(
+        model,
+        test_loader,
+        augmenter=None,
+        stage=StageEnum.PREDICTIVE,
+        params=None,
+        variable_encoder=None,
+        token_expander=None,
+        initial_mesh=None,
+        wandb_log=False):
+    print('Evaluating for Stage: ', stage)
+    model.eval()
+    with torch.no_grad():
+        ntest = 0
+        test_l2 = 0
+        test_l1 = 0
+        loss_p = nn.MSELoss()
+        loss_l1 = nn.L1Loss()
+        t1 = default_timer()
+        predictions = []
+        for data in test_loader:
+            x, y = data['x'].cuda(), data['y'].cuda()
+            static_features = data['static_features']
+
+            if augmenter is not None:
+                x, _ = batched_masker(x, augmenter)
+
+            inp = prepare_input(
+                x,
+                static_features,
+                params,
+                variable_encoder,
+                token_expander,
+                initial_mesh,
+                data)
+            out_grid_displacement, in_grid_displacement = get_grid_displacement(
+                params, stage, data)
+
+            batch_size = x.shape[0]
+            out = model(inp, out_grid_displacement=out_grid_displacement,
+                        in_grid_displacement=in_grid_displacement)
+
+            if getattr(params, 'horizontal_skip', False):
+                out = out + x
+
+            if isinstance(out, (list, tuple)):
+                out = out[0]
+
+            ntest += 1
+            target = y.clone()
+
+            predictions.append((out, target))
+
+            test_l2 += loss_p(target.reshape(batch_size, -1),
+                              out.reshape(batch_size, -1)).item()
+            test_l1 += loss_l1(target.reshape(batch_size, -1),
+                               out.reshape(batch_size, -1)).item()
+
+    test_l2 /= ntest
+    test_l1 /= ntest
+    t2 = default_timer()
+    avg_time = (t2 - t1) / ntest
+
+    wandb.log({'Augmented test_error_l2': test_l2}, commit=True)
+    wandb.log({'Augmented test_error_l1': test_l1}, commit=True)
+    wandb.log({'Avg test_time': avg_time}, commit=True)
+    print(f"Augmented Test Error  {stage}: ", test_l2)
+
+    if hasattr(params, 'save_predictions') and params.save_predictions:
+        torch.save(predictions[:50], f'../xy/predictions_{params.config}.pt')

@@ -1,9 +1,9 @@
-from neuralop.layers.neighbor_search import NeighborSearch
+from neuralop.layers.foundation_codano_neighbor_search import NeighborSearch
 from neuralop.layers.foundation_codano_integral_transform import IntegralTransform
 from neuralop.layers.mlp import MLPLinear
 from neuralop.baseline_utils.rigid_neighbor import FixedNeighborSearch
 from einops import rearrange
-from neuralop.layers.embeddings import PositionalEmbedding
+from neuralop.layers.foundation_codano_embeddings import PositionalEmbedding
 import torch.nn as nn
 import torch
 import torch.nn.functional as F

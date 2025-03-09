@@ -10,9 +10,10 @@ How to start work in convenience
 2. Download dataset
 .. code ::
    python compression/dataset_download.py
+   python compression/wandb_download/dataset_download.py
 3. Download models
 .. code ::
-   python compression/wandb_download/download.py
+   python compression/wandb_download/weights_download.py
 4. Evaluation Example (on docano)
 .. code :: 
    python compression/evaluation_docano.py

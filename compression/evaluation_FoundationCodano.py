@@ -14,9 +14,9 @@ from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
-from compression.utils import evaluate_model, compare_models, CodanoYParams
+from compression.utils.evaluation_util import evaluate_model, compare_models, CodanoYParams
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
-from compression.utils import missing_variable_testing
+from compression.utils.codano_util import missing_variable_testing
 
 
 if __name__ == "__main__":

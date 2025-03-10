@@ -5,7 +5,7 @@ from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
-from compression.utils import evaluate_model, compare_models
+from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.quantization.dynamic_quantization import DynamicQuantization
 
 deeponet_model = DeepONet(

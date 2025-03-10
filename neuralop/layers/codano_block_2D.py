@@ -5,7 +5,7 @@ from einops import rearrange
 import torch
 from torch import nn
 import torch.nn.functional as F
-from neuralop.layers.foundation_codano_FNOBlocks import FNOBlocks
+from neuralop.layers.foundation_codano_fno_block import FNOBlocks
 from .fino_2D import SpectralConvKernel2d
 
 # Implementation of 2d Codano Blocks

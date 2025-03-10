@@ -4,9 +4,9 @@ from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
-from compression.utils import FNOYParams
+from compression.utils.fno_util import FNOYParams
 from neuralop.data.datasets.mixed import get_data_loader
-from compression.utils import evaluate_model, compare_models
+from compression.utils.evaluation_util import evaluate_model, compare_models
 import os, sys, time
 import argparse
 import wandb

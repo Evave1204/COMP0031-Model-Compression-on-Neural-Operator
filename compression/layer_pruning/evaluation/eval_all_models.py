@@ -38,9 +38,9 @@ def load_fno_config(config_path="config/darcy_config.yaml"):
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
     n_train=1000,
     batch_size=16,
-    test_resolutions=[16, 32],
-    n_tests=[100, 50],
-    test_batch_sizes=[16, 16],
+    test_resolutions=[128],
+    n_tests=[100],
+    test_batch_sizes=[16],
     encode_input=False,
     encode_output=False,
 )
@@ -51,27 +51,55 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
     Load a model from weight_path, create a deep copy for pruning,
     apply the selected pruning technique, and then evaluate using compare_models.
     """
-    # Instantiate the model with required parameters.
+    # Instantiate the model with training parameters.
     if ModelClass.__name__ == "FNO":
-        n_modes, in_channels, out_channels, hidden_channels = load_fno_config()
-        base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
+        # Use parameters from darcy_config.yaml (fno2d section)
+        n_modes = (32, 32)
+        in_channels = 1
+        out_channels = 1
+        hidden_channels = 64
+        n_layers = 5
+        base_model = ModelClass(
+            n_modes, in_channels, out_channels, hidden_channels,
+            n_layers=n_layers, skip="linear", norm="group_norm",
+            implementation="factorized", projection_channel_ratio=2,
+            separable=False, dropout=0.0, rank=1.0
+        )
     elif ModelClass.__name__ == "DeepONet":
-        # Remove branch_layers and trunk_layers parameters.
-        base_model = DeepONet(train_resolution=16, in_channels=1, out_channels=1,
-                              hidden_channels=32)
+        # Use parameters from deeponet_darcy_config.yaml
+        train_resolution = 128
+        in_channels = 1
+        out_channels = 1
+        hidden_channels = 64
+        branch_layers = [256, 256, 256, 256, 128]
+        trunk_layers = [256, 256, 256, 256, 128]
+        base_model = ModelClass(train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers)
     elif ModelClass.__name__ == "GINO":
-        base_model = GINO(in_channels=1, out_channels=1)  # Adjust as needed.
+        # Use parameters from gino_carcfd_config.yaml (adjust as necessary)
+        n_modes = (16, 16, 16)
+        in_channels = 1
+        out_channels = 1
+        hidden_channels = 64
+        base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
     elif ModelClass.__name__ == "CODANO":
-        # Remove branch_layers/trunk_layers; use only supported arguments.
-        base_model = CODANO(in_channels=1, output_variable_codimension=1,
-                            hidden_variable_codimension=2, lifting_channels=4)
+        # Use parameters from darcy_config_codano.yaml
+        in_channels = 1
+        output_variable_codimension = 1
+        hidden_variable_codimension = 2
+        lifting_channels = 4
+        base_model = ModelClass(
+            in_channels=in_channels,
+            output_variable_codimension=output_variable_codimension,
+            hidden_variable_codimension=hidden_variable_codimension,
+            lifting_channels=lifting_channels
+        )
     else:
         base_model = ModelClass()
 
     # Load the model weights safely.
     with torch.serialization.safe_globals([ScalarInt, ScalarFloat]):
         state_dict = torch.load(weight_path, map_location=device, weights_only=False)
-    base_model.load_state_dict(state_dict)
+    base_model.load_state_dict(state_dict, strict=False)
     base_model = base_model.to(device)
     base_model.eval()
 
@@ -84,7 +112,7 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
         pruner.layer_prune(prune_ratio=prune_ratio)
     elif technique == "magnitude":
         pruner = GlobalMagnitudePruning(pruned_model, prune_ratio=prune_ratio)
-        pruner.prune()  # Adjust if your API differs.
+        pruner.prune()
     else:
         raise ValueError("Unknown compression technique: choose 'layer' or 'magnitude'")
 

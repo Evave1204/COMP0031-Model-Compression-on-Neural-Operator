@@ -8,7 +8,7 @@ from ptflops import get_model_complexity_info
 
 def evaluate_model(model, dataloader, data_processor, device='cuda', track_performance=False, verbose=False):
     """
-    Evaluates model performance with optional tracking of runtime, memory usage, and FLOPs.
+    Evaluates model performance with optional tjracking of runtime, memory usage, and FLOPs.
     
     Parameters
     ----------

@@ -280,7 +280,7 @@ class NsElasticDataset():
             dt,
             normalize=True,
             batch_size=1,
-            train_test_split=0.00001,
+            train_test_split=0.2,
             sample_per_inlet=200,
             ntrain=None,
             ntest=None,
@@ -305,10 +305,10 @@ class NsElasticDataset():
             test_dataset = random_split(
                 test_dataset, [ntest, len(test_dataset) - ntest])[0]
 
-        train_dataloader = DataLoader(
-            train_dataset, batch_size=batch_size, **data_loader_kwargs)
-        test_dataloader = DataLoader(
-            test_dataset, batch_size=batch_size, **data_loader_kwargs)
+        train_dataloader = {128: DataLoader(
+            train_dataset, batch_size=batch_size, **data_loader_kwargs)}
+        test_dataloader = {128: DataLoader(
+            test_dataset, batch_size=batch_size, **data_loader_kwargs)}
 
         return train_dataloader, test_dataloader
 

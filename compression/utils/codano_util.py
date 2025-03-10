@@ -1,5 +1,9 @@
 from neuralop.data_utils.data_utils import *
 from neuralop.models.get_models import *
+from ruamel.yaml import YAML
+from timeit import default_timer
+import time
+
 
 
 class ParamsBase:
@@ -126,6 +130,8 @@ def missing_variable_testing(
         k = 1
         for data in test_loader:
             print(k)
+            if k == 5:
+                break
             k+=1
             x, y = data['x'].cuda(), data['y'].cuda()
             static_features = data['static_features']
@@ -173,3 +179,17 @@ def missing_variable_testing(
 
     # if hasattr(params, 'save_predictions') and params.save_predictions:
     #     torch.save(predictions[:50], f'../xy/predictions_{params.config}.pt')
+
+def get_grid_displacement(params, stage, data):
+    if params.grid_type == "non uniform":
+        with torch.no_grad():
+            if stage == StageEnum.RECONSTRUCTIVE:
+                out_grid_displacement = data['d_grid_x'].cuda()[0]
+                in_grid_displacement = data['d_grid_x'].cuda()[0]
+            else:
+                out_grid_displacement = data['d_grid_y'].cuda()[0]
+                in_grid_displacement = data['d_grid_x'].cuda()[0]
+    else:
+        out_grid_displacement = None
+        in_grid_displacement = None
+    return out_grid_displacement, in_grid_displacement

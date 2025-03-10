@@ -9,6 +9,9 @@ import torch.nn as nn
 from timeit import default_timer
 from tqdm import tqdm
 import wandb
+from neuralop.data_utils.data_utils import batched_masker
+from neuralop.utils import prepare_input
+from compression.utils.codano_util import get_grid_displacement
 
 def evaluate_model(model, dataloader, data_processor, 
                    device='cuda', track_performance=False, verbose=False, evaluation_params=None):
@@ -67,7 +70,12 @@ def evaluate_model(model, dataloader, data_processor,
     h1_loss = H1Loss(d=2, reduction='mean')
 
     with torch.no_grad():
+        j = 0
         for batch in dataloader:
+            j += 1
+            if j == 3:
+                break
+            print(j)
             # batch : {"x":, "y":}
             # print(batch.keys())
             # return
@@ -78,21 +86,26 @@ def evaluate_model(model, dataloader, data_processor,
                 processed_data = {k: v.to(device)
                                   for k, v in batch.items() if torch.is_tensor(v)}
             if evaluation_params is not None:
+                x, y = batch["x"].to(device), batch["y"].to(device)
+                static_features = batch["static_features"]
                 variable_encoder = evaluation_params["variable_encoder"]
                 token_expander = evaluation_params["token_expander"]
                 initial_mesh = evaluation_params["input_mesh"]
                 initial_params = evaluation_params["params"]
                 stage = evaluation_params["stage"]
-                inp = prepare_input(batch["x"], 
-                                    batch["static_features"],
+                
+
+                inp = prepare_input(x, 
+                                    static_features,
                                     initial_params,
                                     variable_encoder,
                                     token_expander,
                                     initial_mesh,
                                     batch)
+
                 out_grid_displacement, in_grid_displacement = get_grid_displacement(
-                params, stage, batch)
-                processed_data = {"x": inp, "y":batch["y"], 
+                initial_params, stage, batch)
+                processed_data = {"x": inp, "y":y, 
                                   "out_grid_displacement":out_grid_displacement,
                                   "in_grid_displacement":in_grid_displacement}
             # Measure FLOPs on first batch only using ptflops
@@ -227,7 +240,8 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
             print(f"\nResults on {resolution}x{resolution} resolution")
             print("-"*30)
         results[f"{resolution}_compressed"] = evaluate_model(model2, loader, data_processor, device,
-                                                          track_performance=track_performance)
+                                                          track_performance=track_performance,
+                                                          evaluation_params=evaluation_params)
         if verbose:
             print(f"L2 Loss: {results[f'{resolution}_compressed']['l2_loss']:.6f}")
             if track_performance:

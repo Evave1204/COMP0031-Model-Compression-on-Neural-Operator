@@ -376,6 +376,7 @@ class SSLWrapper(nn.Module):
     def forward(
         self,
         x: torch.Tensor,
+        y,
         out_grid_displacement=None,
         in_grid_displacement=None
     ):

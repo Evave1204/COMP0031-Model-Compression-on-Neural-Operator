@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 from typing import Dict, Union, List
-
+from compression.quantization.quantized_spectral_layer import QuantizedSpectralConv
 '''
 # Helper function to compute the total memory footprint (in bytes) of a model.
 def _get_model_size_in_bytes(model: nn.Module) -> int:
@@ -276,23 +276,19 @@ Otherwise, quantize the weight (using quantize_tensor), then immediately dequant
 Replace the weight using from_tensor() if available and store an identifier in compressed_layers.
     '''
     def compress_spectral_conv(self, layer, name: str):
-        # Check for the to_tensor/from_tensor interface
-        if not hasattr(layer.weight, "to_tensor"):
-            print(f"[Warning] SpectralConv layer {name} does not support to_tensor(). Skipping quantization.")
-            return layer
-        W = layer.weight.to_tensor()
-        if W.is_complex():
-            print(f"[Warning] SpectralConv layer {name} has complex weights; dynamic quantization not supported. Skipping quantization.")
-            return layer
-        # For simplicity, quantize and then immediately dequantize
-        q_W, scale_W = self.quantize_tensor(W)
-        new_W = q_W.float() * scale_W
-        if hasattr(layer.weight, "from_tensor"):
-            layer.weight.from_tensor(new_W)
-            self.compressed_layers[name] = "SpectralConv"
-        else:
-            print(f"[Warning] SpectralConv layer {name} does not support from_tensor(). Skipping quantization.")
-        return layer
+        """
+        Replaces the given SpectralConv `layer` with a QuantizedSpectralConv.
+        """
+        # Potential checks:
+        # skip if layer is complex_data= True? or not
+        # skip if you want to handle factorization in a certain way?
+        
+        # Just create the wrapper:
+        quantized_spectral = QuantizedSpectralConv(layer)
+        self.compressed_layers[name] = quantized_spectral
+        return quantized_spectral
+
+
 
     '''
     Purpose:

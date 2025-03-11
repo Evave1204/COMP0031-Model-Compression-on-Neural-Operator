@@ -1,6 +1,7 @@
 import torch
 import yaml
 from neuralop.models.deeponet import DeepONet
+from ruamel.yaml.comments import CommentedSeq  # if needed
 
 def load_deeponet_config(config_path="config/deeponet_darcy_config.yaml"):
     with open(config_path, "r") as f:
@@ -16,17 +17,27 @@ def load_deeponet_config(config_path="config/deeponet_darcy_config.yaml"):
 
 def main():
     train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers = load_deeponet_config()
+    # Instantiate DeepONet with the configuration parameters.
     model = DeepONet(train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers)
-    
     weight_path = "models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt"
-    state_dict = torch.load(weight_path, map_location="cpu")
+    with torch.serialization.safe_globals([]):
+        state_dict = torch.load(weight_path, map_location="cpu", weights_only=False)
     model.load_state_dict(state_dict)
     print("DeepONet loaded successfully!")
     
-    # Create a dummy input (adjust dimensions according to your model's forward method)
-    dummy_input = torch.randn(1, in_channels, train_resolution)  # example: 1 x 1 x 128
-    output = model(dummy_input)
-    print("Output:", output)
+    # Create dummy inputs.
+    # Provide a 4D tensor for the branch input.
+    dummy_branch = torch.randn(1, in_channels, train_resolution, train_resolution)
+    # For the trunk input, check your DeepONet implementation.
+    # If it also expects a 4D tensor, do similarly; if it's 2D (e.g. coordinates), adjust accordingly.
+    # For this example, we'll assume it's also a 4D tensor.
+    dummy_trunk = torch.randn(1, in_channels, train_resolution, train_resolution)
+    
+    output = model(dummy_branch, dummy_trunk)
+    if isinstance(output, (list, tuple)):
+        print("Output shapes:", [o.shape for o in output])
+    else:
+        print("Output shape:", output.shape)
 
 if __name__ == "__main__":
     main()

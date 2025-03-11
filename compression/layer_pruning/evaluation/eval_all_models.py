@@ -74,25 +74,25 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
         branch_layers = [256, 256, 256, 256, 128]
         trunk_layers = [256, 256, 256, 256, 128]
         base_model = ModelClass(train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers)
-    elif ModelClass.__name__ == "GINO":
-        # Use parameters from gino_carcfd_config.yaml (adjust as necessary)
-        n_modes = (16, 16, 16)
-        in_channels = 1
-        out_channels = 1
-        hidden_channels = 64
-        base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
-    elif ModelClass.__name__ == "CODANO":
-        # Use parameters from darcy_config_codano.yaml
-        in_channels = 1
-        output_variable_codimension = 1
-        hidden_variable_codimension = 2
-        lifting_channels = 4
-        base_model = ModelClass(
-            in_channels=in_channels,
-            output_variable_codimension=output_variable_codimension,
-            hidden_variable_codimension=hidden_variable_codimension,
-            lifting_channels=lifting_channels
-        )
+    # elif ModelClass.__name__ == "GINO": # ENABLE WHEN NEEDED
+    #     # Use parameters from gino_carcfd_config.yaml (adjust as necessary)
+    #     n_modes = (16, 16, 16)
+    #     in_channels = 1
+    #     out_channels = 1
+    #     hidden_channels = 64
+    #     base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
+    # elif ModelClass.__name__ == "CODANO": # ENABLE WHEN NEEDED
+    #     # Use parameters from darcy_config_codano.yaml
+    #     in_channels = 1
+    #     output_variable_codimension = 1
+    #     hidden_variable_codimension = 2
+    #     lifting_channels = 4
+    #     base_model = ModelClass(
+    #         in_channels=in_channels,
+    #         output_variable_codimension=output_variable_codimension,
+    #         hidden_variable_codimension=hidden_variable_codimension,
+    #         lifting_channels=lifting_channels
+    #     )
     else:
         base_model = ModelClass()
 
@@ -132,19 +132,17 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     technique = "layer"  # Choose "layer" or "magnitude"
 
-    # --- Section 1: Evaluate all 4 models ---
-    # Update these paths to point exactly to your local files.
+    # --- Section 1: Eval all models ---
     fno_weight_path = "models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt"
     deeponet_weight_path = "models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt"
-    gino_weight_path = "models/model-gino-carcfd-32-resolution-2025-03-04-20-01.pt"
-    # If Codano weights are not available or not valid, comment it out.
-    codano_weight_path = "models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt"
+    # gino_weight_path = "models/model-gino-carcfd-32-resolution-2025-03-04-20-01.pt"
+    # codano_weight_path = "models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt"
     
     models_info = {
         "FNO": {"class": FNO, "weight": fno_weight_path},
         "DeepONet": {"class": DeepONet, "weight": deeponet_weight_path},
-        "GINO": {"class": GINO, "weight": gino_weight_path},
-        "Codano": {"class": CODANO, "weight": codano_weight_path},
+        # "GINO": {"class": GINO, "weight": gino_weight_path},
+        # "Codano": {"class": CODANO, "weight": codano_weight_path},
     }
 
     results_section1 = {}
@@ -167,18 +165,18 @@ def main():
     # For demonstration, if separate files are not available, use the same file.
     our_fno_weight = fno_weight_path  # Replace with separate path if available.
     their_fno_weight = fno_weight_path  # Replace with separate path if available.
-    our_codano_weight = codano_weight_path  # Replace with separate path if available.
-    their_codano_weight = codano_weight_path  # Replace with separate path if available.
+    # our_codano_weight = codano_weight_path  # Replace with separate path if available.
+    # their_codano_weight = codano_weight_path  # Replace with separate path if available.
 
     models_info_section2 = {
         "FNO": {
             "our": our_fno_weight,
             "theirs": their_fno_weight
         },
-        "Codano": {
-            "our": our_codano_weight,
-            "theirs": their_codano_weight
-        }
+        # "Codano": {
+            # "our": our_codano_weight,
+            # "theirs": their_codano_weight
+        # }
     }
 
     results_section2 = {}

@@ -70,12 +70,7 @@ def evaluate_model(model, dataloader, data_processor,
     h1_loss = H1Loss(d=2, reduction='mean')
 
     with torch.no_grad():
-        j = 0
         for batch in dataloader:
-            j += 1
-            if j == 3:
-                break
-            print(j)
             # batch : {"x":, "y":}
             # print(batch.keys())
             # return

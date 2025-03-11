@@ -39,8 +39,6 @@ fno_model = fno(params).to(device)
 checkpoints = torch.load("models/ckpt_best.tar", map_location='cpu', weights_only=False)  
 fno_model.load_state_dict(checkpoints['model_state'])
 fno_model.eval()
-print(fno_model)
-
 
 train_loader, test_loaders, data_processor = get_data_loader(params,
                                                                   params.test_path, 
@@ -62,12 +60,12 @@ lowrank_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: SVDLowRank(model, 
                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-                                                   min_rank=16,
-                                                   max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-                                                   is_full_rank=True,
+                                                   min_rank=1,
+                                                   max_rank=128, # option = [8, 16, 32, 64, 128, 256]
+                                                   is_full_rank=False,
                                                    is_compress_conv1d=False,
                                                    is_compress_FC=False,
-                                                   is_comrpess_spectral=True),
+                                                   is_compress_spectral=True),
     create_replica=True
 )
 

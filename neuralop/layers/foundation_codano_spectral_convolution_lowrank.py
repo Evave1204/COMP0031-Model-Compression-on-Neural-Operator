@@ -289,7 +289,6 @@ class SpectralConv_lowrank(BaseSpectralConv):
 
         self.fno_block_precision = fno_block_precision
         self.rank = rank
-        self.ranks = ranks
         self.factorization = factorization
         self.n_layers = n_layers
         self.implementation = implementation
@@ -343,25 +342,43 @@ class SpectralConv_lowrank(BaseSpectralConv):
             self.weight.normal_(0, init_std)
         else:
             # key 
-            self.weight = nn.Parameter(
-                torch.randn(in_channels + out_channels, sum(self.ranks), *self.n_modes))
+            # self.weight = nn.Parameter(
+            #     torch.randn(in_channels + out_channels, sum(self.ranks), *self.n_modes))
+            self.weight = nn.ModuleList()
+            for i in range(len(ranks)):
+                cur_rank = ranks[i]
+                if cur_rank == 0:
+                    weights = FactorizedTensor.new(
+                        weight_shape,
+                        rank=self.rank,
+                        factorization=factorization,
+                        fixed_rank_modes=fixed_rank_modes,
+                        **tensor_kwargs
+                    )
+                    weights = weights.normal_(0, init_std)
+                else:
+                    weight1_shape = (in_channels, cur_rank, *half_total_n_modes)
+                    weight2_shape = (cur_rank, out_channels, *half_total_n_modes)
+                    weight1 = FactorizedTensor.new(
+                                                weight1_shape,
+                                                rank=self.rank,
+                                                factorization=factorization,
+                                                fixed_rank_modes=fixed_rank_modes,
+                                                **tensor_kwargs)
+                    weight2 = FactorizedTensor.new(
+                                                weight2_shape,
+                                                rank=self.rank,
+                                                factorization=factorization,
+                                                fixed_rank_modes=fixed_rank_modes,
+                                                **tensor_kwargs)
+                    weight1 = weight1.normal_(0, init_std)
+                    weight2 = weight2.normal_(0, init_std)
+                    weights = nn.ModuleList([weight1, weight2])
+                self.weight.append(weights)
 
-
-            # self.weight = nn.ModuleList([
-            #     nn.ParameterList([
-            #         nn.Parameter(
-            #             torch.randn(in_channels, self.ranks[i], *self.n_modes)
-            #         ),
-            #         nn.Parameter(
-            #             torch.randn(self.ranks[i], out_channels, *self.n_modes)
-            #         )
-            #     ])
-            #     for i in range(len(self.ranks))
-            # ])
-
-        self._contract = get_contract_fun(
-            self.weight[0], implementation=implementation, separable=separable
-        )
+        # self._contract = get_contract_fun(
+        #     self.weight[0], implementation=implementation, separable=separable
+        # )
 
         if bias:
             self.bias = nn.Parameter(

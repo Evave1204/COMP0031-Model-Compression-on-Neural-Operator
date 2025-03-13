@@ -11,11 +11,13 @@ from neuralop.training.training_state import load_training_state
 from neuralop.layers.spectral_convolution_lowrank import DoubleSpectralConv
 from neuralop.layers.foundation_fno_layers_lowrank import SpectralConv2dV2_lowrank
 from neuralop.layers.fino_2D_lowrank import SpectralConvKernel2d_lowrank
+from neuralop.layers.fino_2D import SpectralConvKernel2d
 import torch
 import torch.nn as nn
 from typing import Dict
 from compression.base import CompressionTechnique
 import copy
+from tltorch.factorized_tensors.core import FactorizedTensor
 
 import torch
 import torch.nn as nn
@@ -311,13 +313,13 @@ class SVDLowRank:
         self.compressed_layers[name] = new_layer
     
     # for foundation codano
+    # large tensor tried
     def compress_spectral_conv_2d_kernel(self, layer, name):
         """
         Compress a SpectralConv layer by applying low-rank SVD on channel dimensions.
         """
-        combined_weights = []  # 用于存放每个权重分解后合并的张量，形状：(C_in+C_out, r, H, W)
-        new_ranks = []         # 存储每个 weight 对应的秩
-
+        weights = [] 
+        new_ranks = []     
         for weight in layer.weight:
             original_weight = weight.to_tensor()
             C_in, C_out, H, W = original_weight.shape
@@ -336,18 +338,14 @@ class SVDLowRank:
             weight1 = (Vh_trunc.T).reshape(C_in, rank, 1, 1).expand(-1, -1, H, W)
 
             weight2 = (U_trunc @ torch.diag(S_trunc)).reshape(C_out, H, W, rank).permute(3, 0, 1, 2)
-            weight2 = weight2.permute(1, 0, 2, 3)  # 变成 (C_out, rank, H, W)
 
-            #total_n_params = weight1.numel() + weight2.numel()
-            # if total_n_params > original_weight.numel():
-            #     weights.append([original_weight])
-            #     ranks.append(1)
-            # else:
-            combined = torch.cat([weight1, weight2], dim=0)  # 在第0维拼接，形状：(C_in + C_out, rank, H, W)
-            combined_weights.append(combined)
-            new_ranks.append(rank)
-        
-        new_weight_tensor = torch.cat(combined_weights, dim=1)
+            total_n_params = weight1.numel() + weight2.numel()
+            if total_n_params > original_weight.numel():
+                weights.append(original_weight)
+                new_ranks.append(0)
+            else:
+                weights.append((weight1, weight2))
+                new_ranks.append(rank)
 
 
         new_layer = SpectralConvKernel2d_lowrank(in_channels=C_in,
@@ -355,10 +353,20 @@ class SVDLowRank:
                                     n_modes=layer.n_modes,
                                     ranks=new_ranks,
                                     n_layers=layer.n_layers,
-                                    output_scaling_factor=layer.output_scaling_factor)
+                                    output_scaling_factor=layer.output_scaling_factor,
+                                    rank=layer.rank,
+                                    factorization=layer.factorization,
+                                    implementation=layer.implementation,
+                                    transform_type=layer.transform_type)
         
         with torch.no_grad():
-            new_layer.weight = nn.Parameter(new_weight_tensor)
+            for i in range(len(new_ranks)):
+                if new_ranks[i] != 0:
+                    weight1, weight2 = weights[i]
+                    new_layer.weight[i][0].tensor.data.copy_(weight1)
+                    new_layer.weight[i][1].tensor.data.copy_(weight2)
+                else:
+                    new_layer.weight[i].tensor.data.copy_(weights[i])
             new_layer.bias = layer.bias
         self.compressed_layers[name] = new_layer
 
@@ -370,7 +378,6 @@ class SVDLowRank:
         - SpectralConv (DenseTensor) is approximated using low-rank SVD.
         """
         self.original_params = sum(p.numel() for p in self.model.parameters())
-        j = 0
         for name, module in self.model.named_modules():
             # Handle Conv1d (kernel_size=1)
             if self.is_compress_conv1d and isinstance(module, nn.Conv1d): #and module.kernel_size == (1,):
@@ -385,8 +392,6 @@ class SVDLowRank:
                 self.compress_foundation_spectral_conv(module,name)
             elif self.is_compress_spectral and ("SpectralConvKernel2d" == type(module).__name__):
                 self.compress_spectral_conv_2d_kernel(module, name)
-                j+=1
-                if j == 5: break
 
         # Replace original layers with compressed versions
         for name, new_layer in self.compressed_layers.items():

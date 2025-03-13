@@ -263,75 +263,31 @@ class SpectralConvKernel2d_lowrank(SpectralConv_lowrank):
         Equivalent to: ``x[:, :, -self.half_n_modes[0]:, :self.half_n_modes[1]]``
         """
 
-        # # mode mixer
-        # # uses separate MLP to mix mode along each co-dim/channels
-        # if self.frequency_mixer:
-        #     W1 = self.W1r + 1.0j * self.W1i
-        #     W2 = self.W2r + 1.0j * self.W2i
-
-        #     x[upper_modes] = self.mode_mixer(x[upper_modes].clone(), W1)
-        #     x[lower_modes] = self.mode_mixer(x[lower_modes].clone(), W2)
-
-        # spectral conv / channel mixer
-
-        # The output will be of size:
-        # (batch_size, self.out_channels, x.size(-2), x.size(-1)//2 + 1)
-
         out_fft = torch.zeros(
             [batch_size, self.out_channels, height, width // 2 + 1],
             dtype=x.dtype,
             device=x.device,
         )
+        
+        weight_pair1 = self.weight[2 * indices]
+        if isinstance(weight_pair1, nn.ModuleList):
+            weight1 = weight_pair1[0]
+            weight2 = weight_pair1[1]
 
-        offset = sum(self.ranks[:2 * indices])
-        current_rank = self.ranks[2 * indices]
-
-        # if len(weight_pair1) == 1:
-        #     out_fft[upper_modes] = torch.einsum('bihw,ijhw->bjhw', x[upper_modes], weight_pair1[0])
-        # else:
-        U, V = torch.split(self.weight, [self.in_channels, self.out_channels], dim=0)
-        U_current = U[:, offset:offset + current_rank, :, :]  # shape: (in_channels, current_rank, H, W)
-        V_current = V[:, offset:offset + current_rank, :, :]  # shape: (out_channels, current_rank, H, W)
-        V_current = V_current.permute(1, 0, 2, 3)             # shape: (current_rank, out_channels, H, W)
-        out_fft[upper_modes] = torch.einsum('bihw,irhw,rjhw->bjhw', x[upper_modes], 
-                                        U_current, V_current)
-
-        # intermediate1 = torch.einsum('bihw,irhw->brhw', x[upper_modes], weight1)
-        # out_fft[upper_modes] = torch.einsum('brhw,rjhw->bjhw', intermediate1, weight2)
+            intermediate1 = torch.einsum('bihw,irhw->brhw', x[upper_modes], weight1)
+            out_fft[upper_modes] = torch.einsum('brhw,rjhw->bjhw', intermediate1, weight2)
+        else:
+            out_fft[upper_modes] = torch.einsum('brhw,ijhw->bjhw', x[upper_modes], weight_pair1)
 
 
-        # weight_pair2 = self.weight[2 * indices + 1]
-        # if len(weight_pair2) == 1:
-        #     out_fft[lower_modes] = torch.einsum('bihw,ijhw->bjhw', x[lower_modes], weight_pair2[0])
-        # else:
-        offset = sum(self.ranks[:2 * indices+1])
-        current_rank = self.ranks[2 * indices+1]
-
-        U, V = torch.split(self.weight, [self.in_channels, self.out_channels], dim=0)
-        U_current = U[:, offset:offset + current_rank, :, :]  # shape: (in_channels, current_rank, H, W)
-        V_current = V[:, offset:offset + current_rank, :, :]  # shape: (out_channels, current_rank, H, W)
-        V_current = V_current.permute(1, 0, 2, 3)             # shape: (current_rank, out_channels, H, W)
-        out_fft[lower_modes] = torch.einsum('bihw,irhw,rjhw->bjhw', x[lower_modes], 
-                                        U_current, V_current)
-
-        # weight3 = weight_pair2[0]
-        # weight4 = weight_pair2[1]
-        # out_fft[lower_modes] = torch.einsum('bihw,irhw,rjhw->bjhw', x[lower_modes], weight3, weight4)
-
-        # intermediate2 = torch.einsum('bihw,irhw->brhw', x[upper_modes], weight3)
-        # out_fft[lower_modes] = torch.einsum('brhw,rjhw->bjhw', intermediate2, weight4)
-        # # Upper block (truncate high frequencies):
-        # out_fft[upper_modes] = self._contract(
-        #     x[upper_modes], # x
-        #     self._get_weight(2 * indices), # weight
-        #     separable=self.separable,
-        # )
-        # Lower block (truncate low frequencies):
-        # out_fft[lower_modes] = self._contract(
-        #     x[lower_modes],
-        #     self._get_weight(2 * indices + 1),
-        #     separable=self.separable,
-        # )
+        weight_pair2 = self.weight[2 * indices + 1]
+        if isinstance(weight_pair2, nn.ModuleList):
+            weight3 = weight_pair2[0]
+            weight4 = weight_pair2[1]
+            intermediate2 = torch.einsum('bihw,irhw->brhw', x[upper_modes], weight3)
+            out_fft[lower_modes] = torch.einsum('brhw,rjhw->bjhw', intermediate2, weight4)
+        else:
+            out_fft[lower_modes] = torch.einsum('brhw,ijhw->bjhw', x[lower_modes], weight_pair2)
 
         if self.output_scaling_factor is not None and output_shape is None:
             height = round(height * self.output_scaling_factor[indices][0])

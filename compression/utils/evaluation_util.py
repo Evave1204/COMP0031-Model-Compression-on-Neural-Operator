@@ -13,10 +13,16 @@ from neuralop.data_utils.data_utils import batched_masker
 from neuralop.utils import prepare_input
 from compression.utils.codano_util import get_grid_displacement
 
-def evaluate_model(model, dataloader, data_processor, 
-                   device='cuda', track_performance=False, verbose=False, evaluation_params=None):
+def evaluate_model(model, 
+                   dataloader, 
+                   data_processor=None, 
+                   device='cuda', 
+                   track_performance=False, 
+                   verbose=False, 
+                   evaluation_params=None):
     """
-    Evaluates model performance with optional tracking of runtime, memory usage, and FLOPs.
+    Evaluates model performance with optional tracking of runtime, memory usage, and FLOPs,
+    while processing inputs in the same manner as the `missing_variable_testing` function.
     
     Parameters
     ----------
@@ -32,13 +38,30 @@ def evaluate_model(model, dataloader, data_processor,
         Whether to track runtime, memory usage, and FLOPs (default False).
     verbose : bool
         Whether to print detailed information during evaluation (default False).
-        
+    evaluation_params : dict or None
+        Dictionary containing optional parameters for evaluation:
+          - params: A configuration object or dict that may have 'horizontal_skip' or other attributes.
+          - stage: The stage of inference (used by get_grid_displacement).
+          - variable_encoder, token_expander, input_mesh: 
+                for preparing the input via `prepare_input`.
+          - augmenter: If present, applies input masking via `batched_masker`.
+
     Returns
     -------
     dict
-        Dictionary containing metrics including 'l2_loss' and performance metrics.
+        Dictionary containing:
+            'l2_loss': Average L2 loss across the dataset (using LpLoss with p=2).
+            'h1_loss': Average H1 loss across the dataset (using H1Loss).
+            If track_performance=True, also includes:
+            'runtime', 'model_size_mb', 'peak_memory_mb', and 'flops' (if available).
     """
     model.eval()
+    
+    # Metrics we keep from the original evaluate_model
+    l2_loss_fn = LpLoss(d=2, p=2, reduction='mean')
+    h1_loss_fn = H1Loss(d=2, reduction='mean')
+    loss_p = nn.MSELoss()
+
     total_l2_loss = 0.0
     total_h1_loss = 0.0
     total_runtime = 0.0
@@ -46,9 +69,10 @@ def evaluate_model(model, dataloader, data_processor,
     
     flops_counted = False
     flops = 0
-    
     model_size_mb = 0
+    
     if track_performance and torch.cuda.is_available():
+        # Move to CPU first to measure memory usage for load
         model = model.to('cpu')
         torch.cuda.empty_cache()
         torch.cuda.reset_peak_memory_stats(device)
@@ -61,101 +85,142 @@ def evaluate_model(model, dataloader, data_processor,
         start_memory = torch.cuda.memory_allocated(device)
     else:
         model = model.to(device)
-    
+
     if data_processor is not None:
         data_processor = data_processor.to(device)
         data_processor.eval()
 
-    l2_loss = LpLoss(d=2, p=2, reduction='mean')
-    h1_loss = H1Loss(d=2, reduction='mean')
-
+    # Extract anything we need from evaluation_params
+    if evaluation_params is not None:
+        params = evaluation_params.get('params', None)
+        stage = evaluation_params.get('stage', None)
+        variable_encoder = evaluation_params.get('variable_encoder', None)
+        token_expander = evaluation_params.get('token_expander', None)
+        initial_mesh = evaluation_params.get('input_mesh', None)
+        augmenter = evaluation_params.get('augmenter', None)
+    else:
+        params = None
+        stage = None
+        variable_encoder = None
+        token_expander = None
+        initial_mesh = None
+        augmenter = None
+        
     with torch.no_grad():
-        j = 0
-        for batch in dataloader:
-            j += 1
-            if j == 2:
-                break
-            # batch : {"x":, "y":}
-            # print(batch.keys())
-            # return
+        for batch in tqdm(dataloader, disable=not verbose):
+            x = batch["x"].to(device)
+            y = batch["y"].to(device)
+            static_features = batch.get("static_features", None)
+            if augmenter is not None:
+                x, _ = batched_masker(x, augmenter)
+
             if data_processor is not None:
-                processed_data = data_processor.preprocess(batch)
+                batch_processed = data_processor.preprocess(batch)
             else:
+                batch_processed = {k: v.to(device) 
+                                   for k, v in batch.items() if torch.is_tensor(v)}
 
-                processed_data = {k: v.to(device)
-                                  for k, v in batch.items() if torch.is_tensor(v)}
-            if evaluation_params is not None:
-                x, y = batch["x"].to(device), batch["y"].to(device)
-                static_features = batch["static_features"]
-                variable_encoder = evaluation_params["variable_encoder"]
-                token_expander = evaluation_params["token_expander"]
-                initial_mesh = evaluation_params["input_mesh"]
-                initial_params = evaluation_params["params"]
-                stage = evaluation_params["stage"]
-                
+            if params is not None and stage is not None:
+                inp = prepare_input(
+                    x,
+                    static_features,
+                    params,
+                    variable_encoder,
+                    token_expander,
+                    initial_mesh,
+                    batch
+                )
+                # Also get the displacements
+                out_grid_displacement, in_grid_displacement = get_grid_displacement(params, stage, batch)
 
-                inp = prepare_input(x, 
-                                    static_features,
-                                    initial_params,
-                                    variable_encoder,
-                                    token_expander,
-                                    initial_mesh,
-                                    batch)
+                # Overwrite or build a dictionary to pass to the model
+                model_input = {
+                    "x": inp,
+                    "y": y,  # not used in forward, but let's keep for clarity
+                    "out_grid_displacement": out_grid_displacement,
+                    "in_grid_displacement": in_grid_displacement
+                }
+            else:
+                # If no special params/stage, we just use the original approach
+                model_input = batch_processed
+                # Make sure 'x' and 'y' are present
+                model_input["x"] = x
+                model_input["y"] = y
 
-                out_grid_displacement, in_grid_displacement = get_grid_displacement(
-                initial_params, stage, batch)
-                processed_data = {"x": inp, "y":y, 
-                                  "out_grid_displacement":out_grid_displacement,
-                                  "in_grid_displacement":in_grid_displacement}
-            # Measure FLOPs on first batch only using ptflops
+            # -- FLOPS measurement on the first batch if requested --
             if track_performance and not flops_counted:
                 try:
-                    # Create an input constructor that returns the processed data dictionary
-                    def input_constructor(input_res):
-                        return {k: v.clone() for k, v in processed_data.items() if torch.is_tensor(v)}
-                    
-                    # Get model complexity using ptflops - note that input_res is unused in our constructor
-                    macs, params = get_model_complexity_info(
-                        model, (1,), input_constructor=input_constructor,
-                        as_strings=False, print_per_layer_stat=False, verbose=verbose, 
-                        backend='aten'  # 'aten' backend is more comprehensive
+                    from ptflops import get_model_complexity_info
+
+                    def input_constructor(_):
+                        # Make a clone of the dictionary so that we don't mess up references
+                        # we only pass the TENSOR inputs needed by the model
+                        # (ptflops can have issues with non-tensor inputs)
+                        clone_dict = {}
+                        for mk, mv in model_input.items():
+                            if torch.is_tensor(mv):
+                                clone_dict[mk] = mv.clone()
+                        return clone_dict
+
+                    macs, params_model = get_model_complexity_info(
+                        model, 
+                        (1,),  # dummy input shape, will be overridden by input_constructor
+                        input_constructor=input_constructor,
+                        as_strings=False, 
+                        print_per_layer_stat=False, 
+                        verbose=verbose,
+                        backend='aten'
                     )
-                    
-                    # Convert MACs to FLOPs (multiply by 2)
-                    flops = macs * 2
+                    flops = macs * 2  # MACs -> FLOPs
                     flops_counted = True
-                    
                 except Exception as e:
                     if verbose:
                         print(f"Error measuring FLOPs with ptflops: {e}")
                     flops = 0
-            
-            # Track runtime
-            if track_performance:
-                start_time = time.time()
 
+            # -- Runtime measurement --
+            start_time = time.time() if track_performance else None
 
-            out = model(**processed_data)
+            # Forward pass
+            out = model(**model_input)
             
+            # Horizontal skip connection if specified
+            if params is not None and getattr(params, 'horizontal_skip', False):
+                # The shape of 'out' must match 'x' here
+                out = out + x
+
+            # End runtime measurement
             if track_performance:
-                # Wait for CUDA operations to finish
                 if torch.cuda.is_available():
                     torch.cuda.synchronize(device)
-                end_time = time.time()
-                total_runtime += (end_time - start_time)
+                total_runtime += (time.time() - start_time)
 
+            # If we have a data_processor, postprocess the output
             if data_processor is not None:
-                out, processed_data = data_processor.postprocess(out, processed_data)
+                out, model_input = data_processor.postprocess(out, model_input)
 
-            total_l2_loss += l2_loss(out, processed_data['y']).item()
-            total_h1_loss += h1_loss(out, processed_data['y']).item()
+            target = model_input['y']
+
+            if evaluation_params is not None:
+                batch_size = out.shape[0]
+                total_l2_loss += loss_p(out.reshape(batch_size, -1), 
+                                        target.reshape(batch_size, -1)).item()
+            else:
+                total_l2_loss += l2_loss_fn(out, target).item()
+                total_h1_loss += h1_loss_fn(out, target).item()
+            
             batch_count += 1
 
-    avg_l2_loss = total_l2_loss / len(dataloader)
-    avg_h1_loss = total_h1_loss / len(dataloader)
+    # Averages
+    avg_l2_loss = total_l2_loss / max(batch_count, 1)
+    avg_h1_loss = total_h1_loss / max(batch_count, 1)
 
-    result = {'l2_loss': avg_l2_loss, 'h1_loss': avg_h1_loss}
+    result = {
+        'l2_loss': avg_l2_loss,
+        'h1_loss': avg_h1_loss,
+    }
 
+    # Performance stats
     if track_performance:
         result['runtime'] = total_runtime / max(batch_count, 1)
 
@@ -165,12 +230,11 @@ def evaluate_model(model, dataloader, data_processor,
         if torch.cuda.is_available():
             peak_memory = torch.cuda.max_memory_allocated(device) - start_memory
             result['peak_memory_mb'] = peak_memory / (1024 * 1024)
-            
+
         if flops > 0:
             result['flops'] = flops
-    
-    return result
 
+    return result
 
 def compare_models(model1, model2, test_loaders, data_processor, device, 
                   model1_name="Original Model", model2_name="Compressed Model",

@@ -3,7 +3,7 @@ from neuralop.models.get_models import *
 from ruamel.yaml import YAML
 from timeit import default_timer
 import time
-
+from tqdm import tqdm
 
 
 class ParamsBase:
@@ -79,7 +79,7 @@ class CodanoYParams(ParamsBase):
             print("------------------ Configuration ------------------")
             for k, v in d.items():
                 print(k, end='=')
-                pprint.pprint(v)
+                print(v)
             print("---------------------------------------------------")
 
     def log(self):
@@ -127,12 +127,7 @@ def missing_variable_testing(
         loss_l1 = nn.L1Loss()
         t1 = default_timer()
         predictions = []
-        k = 1
-        for data in test_loader:
-            print(k)
-            if k == 5:
-                break
-            k+=1
+        for data in tqdm(test_loader):
             x, y = data['x'].cuda(), data['y'].cuda()
             static_features = data['static_features']
 

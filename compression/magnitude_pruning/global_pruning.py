@@ -56,6 +56,9 @@ class GlobalMagnitudePruning(CompressionTechnique):
             else:
                 w = module.weight
 
+            if not hasattr(w, "reshape"):
+                continue
+
             param_data.append(w.reshape(-1))
             param_shapes[full_name] = w.shape
 
@@ -87,6 +90,9 @@ class GlobalMagnitudePruning(CompressionTechnique):
                 w = module.weight.to_tensor()
             else:
                 w = module.weight
+
+            if not hasattr(w, "reshape"):
+                continue
 
             mask = (w.abs() > global_threshold).float()
             self.masks[full_name] = mask

@@ -36,8 +36,8 @@ if __name__ == "__main__":
     random.seed(params.random_seed)
     np.random.seed(params.random_seed)
     params.config = args.config
-    #stage = StageEnum.PREDICTIVE
-    stage = StageEnum.RECONSTRUCTIVE
+    stage = StageEnum.PREDICTIVE
+    #stage = StageEnum.RECONSTRUCTIVE
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     variable_encoder = None
@@ -110,7 +110,7 @@ if __name__ == "__main__":
                                                     min_rank=1,
                                                     max_rank=32, # option = [8, 16, 32, 64, 128, 256]
                                                     is_full_rank=False,
-                                                    is_compress_conv1d=False,
+                                                    is_compress_conv1d=True,
                                                     is_compress_FC=False,
                                                     is_compress_spectral=True),
         create_replica=True

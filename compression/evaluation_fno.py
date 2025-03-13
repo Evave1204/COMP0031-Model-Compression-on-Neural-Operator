@@ -30,7 +30,7 @@ lowrank_model = CompressedModel(
                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
                                                    is_compress_conv1d=False,
                                                    is_compress_FC=False,
-                                                   is_comrpess_spectral=True),
+                                                   is_compress_spectral=True),
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)

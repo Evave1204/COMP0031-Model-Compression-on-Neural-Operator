@@ -182,9 +182,12 @@ codano_gno_NS_ES: &CODANO_GNO_NS_ES
     mu_list: [1.0, 10.0]
     dt: 2
     radius: 0.05
-    model_path: "codano_full_weights/codano_full_model_weights.pt"
-    NS_variable_encoder_path: "codano_full_weights/codano_gno_NS_ES_variable_encoder_NS.pt"
-    ES_variable_encoder_path: "codano_full_weights/codano_gno_NS_ES_variable_encoder_ES.pt"
+    model_path: "models/codano_full_model_weights.pt"
+    NS_variable_encoder_path: "models/codano_gno_NS_ES_variable_encoder_NS.pt"
+    ES_variable_encoder_path: "models/codano_gno_NS_ES_variable_encoder_ES.pt"
+    # model_path: "codano_full_weights/codano_full_model_weights.pt"
+    # NS_variable_encoder_path: "codano_full_weights/codano_gno_NS_ES_variable_encoder_NS.pt"
+    # ES_variable_encoder_path: "codano_full_weights/codano_gno_NS_ES_variable_encoder_ES.pt"
 
 codano_gno_NS: &CODANO_GNO_NS
     <<: *CODANO_GNO

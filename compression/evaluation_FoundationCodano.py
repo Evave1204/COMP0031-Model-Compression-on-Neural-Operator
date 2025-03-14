@@ -89,7 +89,6 @@ if __name__ == "__main__":
         train_test_split = 0.1, # just for test
         sample_per_inlet=params.sample_per_inlet
     )
-    print("Done")
 
     #import pickle
     #with open("test_dataloader.pkl", "wb") as f:
@@ -97,31 +96,31 @@ if __name__ == "__main__":
     # with open("test_dataloader.pkl", "rb") as f:
     #    test_dataloader = pickle.load(f)
 
-    # grid_non, grid_uni = get_meshes(params, params.grid_size)
-    # test_augmenter = None
+    grid_non, grid_uni = get_meshes(params, params.grid_size)
+    test_augmenter = None
 
-    # codano_evaluation_params = {"variable_encoder": variable_encoder,
-    #                             "token_expander": token_expander,
-    #                             "params": params,
-    #                             "stage": stage,
-    #                             "input_mesh":input_mesh}
+    codano_evaluation_params = {"variable_encoder": variable_encoder,
+                                "token_expander": token_expander,
+                                "params": params,
+                                "stage": stage,
+                                "input_mesh":input_mesh}
 
-    # lowrank_model = CompressedModel(
-    #     model=codano_model,
-    #     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.99),
-    #     create_replica=True
-    # )
+    lowrank_model = CompressedModel(
+        model=codano_model,
+        compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.99),
+        create_replica=True
+    )
 
-    # lowrank_model = lowrank_model.to(device)
+    lowrank_model = lowrank_model.to(device)
 
-    # print("\n"*2)
-    # print("Low Ranking.....")
-    # compare_models(
-    #     model1=codano_model,
-    #     model2=lowrank_model,
-    #     test_loaders=test_dataloader,
-    #     data_processor=None,
-    #     device=device,
-    #     track_performance = True,
-    #     evaluation_params = codano_evaluation_params
-    # )
+    print("\n"*2)
+    print("Low Ranking.....")
+    compare_models(
+        model1=codano_model,
+        model2=lowrank_model,
+        test_loaders=test_dataloader,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = codano_evaluation_params
+    )

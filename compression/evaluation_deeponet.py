@@ -4,7 +4,7 @@ from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
-from neuralop.data.datasets import load_darcy_flow_small
+from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.quantization.dynamic_quantization import DynamicQuantization
 
@@ -26,7 +26,7 @@ deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resol
 deeponet_model.eval()
 deeponet_model = deeponet_model.to(device)
 
-train_loader, test_loaders, data_processor = load_darcy_flow_small(
+validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
     n_train=1000,
     batch_size=16,
     test_resolutions=[128],

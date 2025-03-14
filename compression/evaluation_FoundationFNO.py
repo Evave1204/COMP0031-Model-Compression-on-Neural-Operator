@@ -5,7 +5,7 @@ from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from compression.utils.fno_util import FNOYParams
-from neuralop.data.datasets.mixed import get_data_loader
+from neuralop.data.datasets.mixed import get_data_val_test_loader
 from compression.utils.evaluation_util import evaluate_model, compare_models
 import os, sys, time
 import argparse
@@ -40,7 +40,7 @@ checkpoints = torch.load("models/ckpt_best.tar", map_location='cpu', weights_onl
 fno_model.load_state_dict(checkpoints['model_state'])
 fno_model.eval()
 
-train_loader, test_loaders, data_processor = get_data_loader(params,
+validation_dataloaders, test_loaders, data_processor = get_data_val_test_loader(params,
                                                                   params.test_path, 
                                                                   dist.is_initialized(), 
                                                                   train=False, 

@@ -35,7 +35,7 @@ if __name__ == "__main__":
     random.seed(params.random_seed)
     np.random.seed(params.random_seed)
     params.config = args.config
-    stage = StageEnum.PREDICTIVE
+    stage = StageEnum.RECONSTRUCTIVE
     #stage = StageEnum.RECONSTRUCTIVE
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -94,7 +94,7 @@ if __name__ == "__main__":
     #import pickle
     #with open("test_dataloader.pkl", "wb") as f:
     #    pickle.dump(test_dataloader, f)
-    #with open("test_dataloader.pkl", "rb") as f:
+    # with open("test_dataloader.pkl", "rb") as f:
     #    test_dataloader = pickle.load(f)
 
     # grid_non, grid_uni = get_meshes(params, params.grid_size)

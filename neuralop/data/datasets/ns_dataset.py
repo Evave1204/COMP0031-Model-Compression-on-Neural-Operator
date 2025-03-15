@@ -273,6 +273,51 @@ class NsElasticDataset():
             torch.float), displacement.to(
             torch.float)
 
+    def get_validation_test_dataloader(
+            self,
+            mu_list,
+            dt,
+            normalize=True,
+            batch_size=1,
+            train_test_split=0.2,
+            val_ratio=0.2, 
+            sample_per_inlet=200,
+            ntrain=None,
+            ntest=None,
+            data_loader_kwargs={'num_workers': 2}):
+
+        train_datasets = []
+        test_datasets = []
+
+        for mu in mu_list:
+            train, test = self.get_tensor_dataset(
+                mu, dt, normalize, train_test_split=train_test_split, sample_per_inlet=sample_per_inlet)
+            train_datasets.append(train)
+            test_datasets.append(test)
+
+        train_dataset = ConcatDataset(train_datasets)
+        test_dataset = ConcatDataset(test_datasets)
+
+        print("****Train dataset size***: ", len(train_dataset))
+        print("***Test dataset size***: ", len(test_dataset))
+
+        if ntrain is not None:
+            train_dataset = random_split(train_dataset, [ntrain, len(train_dataset) - ntrain])[0]
+
+        total_test_size = len(test_dataset)
+        val_size = int(total_test_size * val_ratio)
+        test_size = total_test_size - val_size
+
+        val_dataset, test_dataset = random_split(test_dataset, [val_size, test_size])
+
+        if ntest is not None:
+            test_dataset = random_split(test_dataset, [ntest, len(test_dataset) - ntest])[0]
+
+        train_dataloader = {128: DataLoader(train_dataset, batch_size=batch_size, **data_loader_kwargs)}
+        val_dataloader = {128: DataLoader(val_dataset, batch_size=batch_size, **data_loader_kwargs)}
+        test_dataloader = {128: DataLoader(test_dataset, batch_size=batch_size, **data_loader_kwargs)}
+
+        return val_dataloader, test_dataloader
 
     def get_dataloader(
             self,

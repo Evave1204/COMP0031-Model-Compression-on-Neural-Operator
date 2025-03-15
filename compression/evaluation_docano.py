@@ -4,7 +4,7 @@ from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
-from neuralop.data.datasets import load_darcy_flow_small
+from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 
@@ -42,7 +42,7 @@ fno_model = fno_model.to(device)
 
 
 
-train_loader, test_loaders, data_processor = load_darcy_flow_small(
+validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
     n_train=1000,
     batch_size=16,
     test_resolutions=[16, 32],
@@ -84,7 +84,7 @@ lowrank_model = CompressedModel(
                                                    max_rank=8, # option = [8, 16, 32, 64, 128, 256]
                                                    is_compress_conv1d=True,
                                                    is_compress_FC=False,
-                                                   is_comrpess_spectral=False), # no need to factorize spectral due to small
+                                                   is_compress_spectral=False), # no need to factorize spectral due to small
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)

@@ -392,6 +392,7 @@ class SVDLowRank:
                 self.compress_foundation_spectral_conv(module,name)
             elif self.is_compress_spectral and ("SpectralConvKernel2d" == type(module).__name__):
                 self.compress_spectral_conv_2d_kernel(module, name)
+                break
 
         # Replace original layers with compressed versions
         for name, new_layer in self.compressed_layers.items():

@@ -81,7 +81,7 @@ if __name__ == "__main__":
         params=params
     )
 
-    _, test_dataloader = dataset.get_dataloader(
+    validation_dataloader, test_dataloader = dataset.get_validation_test_dataloader(
         params.mu_list, params.dt,
         ntrain=params.get('ntrain'),
         ntest=40,
@@ -104,20 +104,47 @@ if __name__ == "__main__":
                                 "params": params,
                                 "stage": stage,
                                 "input_mesh":input_mesh}
-
-    lowrank_model = CompressedModel(
+    # Compress Models
+    prune_model = CompressedModel(
         model=codano_model,
         compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.99),
         create_replica=True
     )
 
+    prune_model = prune_model.to(device)
+
+
+    lowrank_model = CompressedModel(
+        model=codano_model,
+        compression_technique=lambda model: SVDLowRank(model, 
+                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+                                                    min_rank=1,
+                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                    is_compress_conv1d=False,
+                                                    is_compress_FC=False,
+                                                    is_compress_spectral=True),
+        create_replica=True
+    )
     lowrank_model = lowrank_model.to(device)
+
+    # Start compare models
+    print("\n"*2)
+    print("Pruning.....")
+    compare_models(
+        model1=codano_model,
+        model2=prune_model,
+        test_loaders=test_dataloader,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = codano_evaluation_params
+    )
 
     print("\n"*2)
     print("Low Ranking.....")
     compare_models(
         model1=codano_model,
-        model2=lowrank_model,
+        model2=prune_model,
         test_loaders=test_dataloader,
         data_processor=None,
         device=device,

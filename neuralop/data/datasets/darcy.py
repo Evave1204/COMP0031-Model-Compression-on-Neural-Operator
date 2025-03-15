@@ -168,6 +168,65 @@ def load_darcy_flow_small(n_train,
     
     return train_loader, test_loaders, dataset.data_processor
     
+from torch.utils.data import random_split
+
+def load_darcy_flow_small_validation_test(n_train,
+                          n_tests,
+                          batch_size,
+                          test_batch_sizes,
+                          val_ratio=0.2,  
+                          data_root=example_data_root,
+                          test_resolutions=[16, 32],
+                          encode_input=False,
+                          encode_output=True,
+                          encoding="channel-wise",
+                          channel_dim=1):
+
+    dataset = DarcyDataset(root_dir=data_root,
+                           n_train=n_train,
+                           n_tests=n_tests,
+                           batch_size=batch_size,
+                           test_batch_sizes=test_batch_sizes,
+                           train_resolution=16,
+                           test_resolutions=test_resolutions,
+                           encode_input=encode_input,
+                           encode_output=encode_output,
+                           channel_dim=channel_dim,
+                           encoding=encoding,
+                           download=False)
+
+    train_loader = DataLoader(dataset.train_db,
+                              batch_size=batch_size,
+                              num_workers=0,
+                              pin_memory=True,
+                              persistent_workers=False)
+
+    test_loaders = {}
+    val_loaders = {} 
+    for res, test_bsize in zip(test_resolutions, test_batch_sizes):
+        full_test_dataset = dataset.test_dbs[res]
+        total_size = len(full_test_dataset)
+        val_size = int(total_size * val_ratio)
+        test_size = total_size - val_size
+
+        val_dataset, test_dataset = random_split(full_test_dataset, [val_size, test_size])
+
+        val_loaders[res] = DataLoader(val_dataset,
+                                      batch_size=test_bsize,
+                                      shuffle=True,  
+                                      num_workers=0,
+                                      pin_memory=True,
+                                      persistent_workers=False)
+
+        test_loaders[res] = DataLoader(test_dataset,
+                                       batch_size=test_bsize,
+                                       shuffle=False,  
+                                       num_workers=0,
+                                       pin_memory=True,
+                                       persistent_workers=False)
+
+    return val_loaders, test_loaders, dataset.data_processor
+
 # legacy pt Darcy Flow loader
 def load_darcy_pt(n_train,
                   n_tests,

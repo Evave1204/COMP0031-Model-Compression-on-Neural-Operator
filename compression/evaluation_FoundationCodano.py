@@ -61,7 +61,10 @@ if __name__ == "__main__":
 
     codano_model.load_state_dict(torch.load("models/codano_whole_model_weights.pt"), strict=False)
     codano_model = codano_model.cuda().eval()
-    print(codano_model)
+    #print(codano_model)
+
+
+
     if variable_encoder is not None:
         variable_encoder = variable_encoder.cuda().eval()
     if token_expander is not None:
@@ -97,35 +100,52 @@ if __name__ == "__main__":
     #     initial_mesh=input_mesh
     # )
 
-    codano_evaluation_params = {"variable_encoder": variable_encoder,
-                                "token_expander": token_expander,
-                                "params": params,
-                                "stage": stage,
-                                "input_mesh":input_mesh}
+    # codano_evaluation_params = {"variable_encoder": variable_encoder,
+    #                             "token_expander": token_expander,
+    #                             "params": params,
+    #                             "stage": stage,
+    #                             "input_mesh":input_mesh}
 
-    lowrank_model = CompressedModel(
-        model=codano_model,
-        compression_technique=lambda model: SVDLowRank(model, 
-                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-                                                    min_rank=16,
-                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-                                                    is_full_rank=False,
-                                                    is_compress_conv1d=True,
-                                                    is_compress_FC=True,
-                                                    is_comrpess_spectral=True),
-        create_replica=True
-    )
+    # lowrank_model = CompressedModel(
+    #     model=codano_model,
+    #     compression_technique=lambda model: SVDLowRank(model, 
+    #                                                 rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+    #                                                 min_rank=16,
+    #                                                 max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+    #                                                 is_full_rank=False,
+    #                                                 is_compress_conv1d=True,
+    #                                                 is_compress_FC=True,
+    #                                                 is_comrpess_spectral=True),
+    #     create_replica=True
+    # )
 
-    lowrank_model = lowrank_model.to(device)
+    # lowrank_model = lowrank_model.to(device)
 
-    print("\n"*2)
-    print("Low Ranking.....")
-    compare_models(
-        model1=codano_model,
-        model2=lowrank_model,
-        test_loaders=test_dataloader,
-        data_processor=None,
-        device=device,
-        track_performance = True,
-        evaluation_params = codano_evaluation_params
-    )
+    # print("\n"*2)
+    # print("Low Ranking.....")
+    # compare_models(
+    #     model1=codano_model,
+    #     model2=lowrank_model,
+    #     test_loaders=test_dataloader,
+    #     data_processor=None,
+    #     device=device,
+    #     track_performance = True,
+    #     evaluation_params = codano_evaluation_params
+    # )
+
+dynamic_quant_model = CompressedModel(
+    model=codano_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+dynamic_quant_model = dynamic_quant_model.to(device)
+
+print("\n"*2)
+print("Dynamic Quantization.....")
+compare_models(
+    model1=codano_model,               # The original model (it will be moved to CPU in evaluate_model)
+    model2=dynamic_quant_model,     # The dynamically quantized model
+    test_loaders=test_dataloader,
+    data_processor=None,
+    device=device
+)

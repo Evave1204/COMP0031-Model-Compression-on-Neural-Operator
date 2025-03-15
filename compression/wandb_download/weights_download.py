@@ -15,11 +15,12 @@ artifacts = [
     # "ucl-neural-operator/training/model-deeponet-darcy-128-resolution-2025-03-04-18-53:v0",
     # "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-03-04-20-01:v0",
     'ucl-neural-operator/data/foundational-codano-weights:v0', # foundational codano weights
-    #'ucl-neural-operator/data/foundational-fno-weights:v0' # foundational fno weights
+    'ucl-neural-operator/data/foundational-fno-weights:v0' # foundational fno weights
 
 ]
 
 run = wandb.init()
+
 
 for artifact_name in artifacts:
     artifact = run.use_artifact(artifact_name, type="weights")

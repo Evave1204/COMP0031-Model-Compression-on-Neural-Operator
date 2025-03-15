@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 from typing import Dict, Union, List
 from compression.quantization.quantized_spectral_layer import QuantizedSpectralConv
+from compression.quantization.quantized_spectral_conv2dv2 import QuantizedSpectralConv2dV2
 '''
 # Helper function to compute the total memory footprint (in bytes) of a model.
 def _get_model_size_in_bytes(model: nn.Module) -> int:
@@ -275,6 +276,8 @@ If the weight is complex, print a warning and skip quantization.
 Otherwise, quantize the weight (using quantize_tensor), then immediately dequantize it (multiply back by the scale).
 Replace the weight using from_tensor() if available and store an identifier in compressed_layers.
     '''
+
+    
     def compress_spectral_conv(self, layer, name: str):
         """
         Replaces the given SpectralConv `layer` with a QuantizedSpectralConv.
@@ -284,9 +287,20 @@ Replace the weight using from_tensor() if available and store an identifier in c
         # skip if you want to handle factorization in a certain way?
         
         # Just create the wrapper:
+        #print(f"[Debug] Inside compress_spectral_conv for {name}!")
         quantized_spectral = QuantizedSpectralConv(layer)
         self.compressed_layers[name] = quantized_spectral
         return quantized_spectral
+
+    def compress_spectral_conv2dV2(self, layer, name: str):
+        """
+        Replaces the given SpectralConv2dV2 layer with a QuantizedSpectralConv2dV2.
+        """
+        quantized_spectral_2dV2 = QuantizedSpectralConv2dV2(layer)
+        self.compressed_layers[name] = quantized_spectral_2dV2
+        return quantized_spectral_2dV2
+    
+
 
 
 
@@ -332,9 +346,13 @@ Returns the modified model.
             elif isinstance(module, nn.Conv1d) and module.kernel_size == (1,):
                 quantized_module = self.compress_conv1d(module, name)
                 self.replace_module(name, quantized_module)
-            elif "SpectralConv" in type(module).__name__:
+            elif type(module).__name__ == "SpectralConv":
                 new_module = self.compress_spectral_conv(module, name)
                 self.replace_module(name, new_module)
+            elif type(module).__name__ == "SpectralConv2dV2":
+                new_module = self.compress_spectral_conv2dV2(module, name)
+                self.replace_module(name, new_module)
+            
         print("------------------------------[Dynamic Quantization] Compression applied successfully------------------------------")        
         return self.model
         

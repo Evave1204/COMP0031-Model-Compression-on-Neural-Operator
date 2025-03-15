@@ -9,7 +9,7 @@ from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.utils.fno_util import optional_fno
 
-fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="low")
+fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="high")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 fno_model = fno_model.to(device)
 

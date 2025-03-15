@@ -39,8 +39,10 @@ fno_model = fno(params).to(device)
 checkpoints = torch.load("models/ckpt_best.tar", map_location='cpu', weights_only=False)  
 fno_model.load_state_dict(checkpoints['model_state'])
 fno_model.eval()
-print(fno_model)
-
+#print(fno_model)
+print("Original Model Layers:")
+for name, layer in fno_model.named_modules():
+    print(f"{name}: {layer}")
 
 train_loader, test_loaders, data_processor = get_data_loader(params,
                                                                   params.test_path, 
@@ -58,27 +60,27 @@ train_loader, test_loaders, data_processor = get_data_loader(params,
 # )
 # pruned_model = pruned_model.to(device)
 
-lowrank_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model, 
-                                                   rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-                                                   min_rank=16,
-                                                   max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-                                                   is_full_rank=True,
-                                                   is_compress_conv1d=False,
-                                                   is_compress_FC=False,
-                                                   is_comrpess_spectral=True),
-    create_replica=True
-)
-
-lowrank_model = lowrank_model.to(device)
-
-# dynamic_quant_model = CompressedModel(
+# lowrank_model = CompressedModel(
 #     model=fno_model,
-#     compression_technique=lambda model: DynamicQuantization(model),
+#     compression_technique=lambda model: SVDLowRank(model, 
+#                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+#                                                    min_rank=16,
+#                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+#                                                    is_full_rank=True,
+#                                                    is_compress_conv1d=False,
+#                                                    is_compress_FC=False,
+#                                                    is_comrpess_spectral=True),
 #     create_replica=True
 # )
-# dynamic_quant_model = dynamic_quant_model.to(device)
+
+# lowrank_model = lowrank_model.to(device)
+
+dynamic_quant_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+dynamic_quant_model = dynamic_quant_model.to(device)
 
 
 # Start Compression ..
@@ -93,23 +95,23 @@ lowrank_model = lowrank_model.to(device)
 #     device=device
 # )
 
-print("\n"*2)
-print("Low Ranking.....")
-compare_models(
-    model1=fno_model,
-    model2=lowrank_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device,
-    track_performance = True
-)
-
 # print("\n"*2)
-# print("Dynamic Quantization.....")
+# print("Low Ranking.....")
 # compare_models(
-#     model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
-#     model2=dynamic_quant_model,     # The dynamically quantized model
+#     model1=fno_model,
+#     model2=lowrank_model,
 #     test_loaders=test_loaders,
 #     data_processor=data_processor,
-#     device=device
+#     device=device,
+#     track_performance = True
 # )
+
+print("\n"*2)
+print("Dynamic Quantization.....")
+compare_models(
+    model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
+    model2=dynamic_quant_model,     # The dynamically quantized model
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device
+)

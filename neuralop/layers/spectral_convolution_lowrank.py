@@ -55,7 +55,6 @@ class DoubleSpectralConv(BaseSpectralConv):
     ):
         super().__init__(device=device)
         
-        # 参数校验与初始化
         self.in_channels = in_channels
         self.out_channels = out_channels
         self.mid_channels = mid_channels
@@ -87,7 +86,6 @@ class DoubleSpectralConv(BaseSpectralConv):
             init_std2, deepcopy(decomposition_kwargs) or {}
         )
 
-        # 偏置项
         if bias:
             self.bias = nn.Parameter(
                 init_std2 * torch.randn(*(tuple([out_channels]) + (1,) * self.order))

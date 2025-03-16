@@ -6,7 +6,7 @@ from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
-from neuralop.data.datasets import load_darcy_flow_small
+from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
 
 class FNOYParams():
   """ Yaml file parser """
@@ -74,7 +74,7 @@ def optional_fno(resolution):
             dropout=0.0)
         fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-02-05-19-55.pt", weights_only=False))
         fno_model.eval()    
-        train_loader, test_loaders, data_processor = load_darcy_flow_small(
+        train_loader, test_loaders, data_processor = load_darcy_flow_small_validation_test(
             n_train=1000,
             batch_size=16,
             test_resolutions=[16, 32],
@@ -106,7 +106,7 @@ def optional_fno(resolution):
         fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt", weights_only=False))
         fno_model.eval()
 
-        train_loader, test_loaders, data_processor = load_darcy_flow_small(
+        train_loader, test_loaders, data_processor = load_darcy_flow_small_validation_test(
             n_train=100,
             batch_size=16,
             test_resolutions=[128],

@@ -22,7 +22,20 @@ fno_model = fno_model.to(device)
 # )
 # pruned_model = pruned_model.to(device)
 
-# lowrank_model = CompressedModel(
+lowrank_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: SVDLowRank(model, 
+                                                   rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+                                                   min_rank=16,
+                                                   max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                   is_compress_conv1d=False,
+                                                   is_compress_FC=False,
+                                                   is_compress_spectral=True),
+    create_replica=True
+)
+lowrank_model = lowrank_model.to(device)
+
+# dynamic_quant_model = CompressedModel(
 #     model=fno_model,
 #     compression_technique=lambda model: SVDLowRank(model, 
 #                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]

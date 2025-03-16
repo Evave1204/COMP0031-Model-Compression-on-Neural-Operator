@@ -1,7 +1,6 @@
 '''
 from original but only evaluation...
 '''
-from neuralop.models.codano_gino import CodANO
 import argparse
 import torch
 import random
@@ -31,13 +30,13 @@ if __name__ == "__main__":
     args = parser.parse_args()
     config_file = './config/ssl_ns_elastic.yaml'
     print("Loading config", args.config)
-    params = CodanoYParams(config_file, args.config, print_params=False)
+    params = CodanoYParams(config_file, args.config, print_params=True)
     torch.manual_seed(params.random_seed)
     random.seed(params.random_seed)
     np.random.seed(params.random_seed)
     params.config = args.config
-    #stage = StageEnum.PREDICTIVE
     stage = StageEnum.RECONSTRUCTIVE
+    #stage = StageEnum.RECONSTRUCTIVE
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     variable_encoder = None
@@ -56,14 +55,19 @@ if __name__ == "__main__":
 
     print("Setting the Grid")
     mesh = get_mesh(params)
-    input_mesh = torch.from_numpy(mesh).float().cuda()
+    input_mesh = torch.from_numpy(mesh).type(torch.float).cuda()
     codano_model.set_initial_mesh(input_mesh)
 
-    codano_model.load_state_dict(torch.load("models/codano_whole_model_weights.pt"), strict=False)
+    stage = StageEnum.PREDICTIVE
+    codano_model.load_state_dict(torch.load(params.model_path), strict=False)
     codano_model = codano_model.cuda().eval()
-    #print(codano_model)
+    print(codano_model)
 
-
+    variable_encoder.load_encoder(
+                    "NS", params.NS_variable_encoder_path)
+    
+    variable_encoder.load_encoder(
+                "ES", params.ES_variable_encoder_path)
 
     if variable_encoder is not None:
         variable_encoder = variable_encoder.cuda().eval()
@@ -76,76 +80,74 @@ if __name__ == "__main__":
         mesh_location=params.input_mesh_location,
         params=params
     )
-    _, test_dataloader = dataset.get_dataloader(
+
+    validation_dataloader, test_dataloader = dataset.get_validation_test_dataloader(
         params.mu_list, params.dt,
         ntrain=params.get('ntrain'),
-        ntest=params.get('ntest'),
+        ntest=40,
         batch_size = 1,
-        train_test_split = 0.0001, # just for test
+        train_test_split = 0.1, # just for test
         sample_per_inlet=params.sample_per_inlet
     )
+
+    #import pickle
+    #with open("test_dataloader.pkl", "wb") as f:
+    #    pickle.dump(test_dataloader, f)
+    # with open("test_dataloader.pkl", "rb") as f:
+    #    test_dataloader = pickle.load(f)
 
     grid_non, grid_uni = get_meshes(params, params.grid_size)
     test_augmenter = None
 
-    print("Evaluating model on test dataset...")
-    # missing_variable_testing(
-    #     model,
-    #     test_dataloader,
-    #     augmenter=test_augmenter,
-    #     stage=stage,
-    #     params=params,
-    #     variable_encoder=variable_encoder,
-    #     token_expander=token_expander,
-    #     initial_mesh=input_mesh
-    # )
+    codano_evaluation_params = {"variable_encoder": variable_encoder,
+                                "token_expander": token_expander,
+                                "params": params,
+                                "stage": stage,
+                                "input_mesh":input_mesh}
+    # Compress Models
+    prune_model = CompressedModel(
+        model=codano_model,
+        compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.99),
+        create_replica=True
+    )
 
-    # codano_evaluation_params = {"variable_encoder": variable_encoder,
-    #                             "token_expander": token_expander,
-    #                             "params": params,
-    #                             "stage": stage,
-    #                             "input_mesh":input_mesh}
+    prune_model = prune_model.to(device)
 
-    # lowrank_model = CompressedModel(
-    #     model=codano_model,
-    #     compression_technique=lambda model: SVDLowRank(model, 
-    #                                                 rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-    #                                                 min_rank=16,
-    #                                                 max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-    #                                                 is_full_rank=False,
-    #                                                 is_compress_conv1d=True,
-    #                                                 is_compress_FC=True,
-    #                                                 is_comrpess_spectral=True),
-    #     create_replica=True
-    # )
 
-    # lowrank_model = lowrank_model.to(device)
+    lowrank_model = CompressedModel(
+        model=codano_model,
+        compression_technique=lambda model: SVDLowRank(model, 
+                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+                                                    min_rank=1,
+                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                    is_compress_conv1d=False,
+                                                    is_compress_FC=False,
+                                                    is_compress_spectral=True),
+        create_replica=True
+    )
+    lowrank_model = lowrank_model.to(device)
 
-    # print("\n"*2)
-    # print("Low Ranking.....")
-    # compare_models(
-    #     model1=codano_model,
-    #     model2=lowrank_model,
-    #     test_loaders=test_dataloader,
-    #     data_processor=None,
-    #     device=device,
-    #     track_performance = True,
-    #     evaluation_params = codano_evaluation_params
-    # )
+    # Start compare models
+    print("\n"*2)
+    print("Pruning.....")
+    compare_models(
+        model1=codano_model,
+        model2=prune_model,
+        test_loaders=test_dataloader,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = codano_evaluation_params
+    )
 
-dynamic_quant_model = CompressedModel(
-    model=codano_model,
-    compression_technique=lambda model: DynamicQuantization(model),
-    create_replica=True
-)
-dynamic_quant_model = dynamic_quant_model.to(device)
-
-print("\n"*2)
-print("Dynamic Quantization.....")
-compare_models(
-    model1=codano_model,               # The original model (it will be moved to CPU in evaluate_model)
-    model2=dynamic_quant_model,     # The dynamically quantized model
-    test_loaders=test_dataloader,
-    data_processor=None,
-    device=device
-)
+    print("\n"*2)
+    print("Low Ranking.....")
+    compare_models(
+        model1=codano_model,
+        model2=prune_model,
+        test_loaders=test_dataloader,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = codano_evaluation_params
+    )

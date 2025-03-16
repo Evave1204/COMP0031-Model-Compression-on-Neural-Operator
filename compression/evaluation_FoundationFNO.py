@@ -5,7 +5,7 @@ from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from compression.utils.fno_util import FNOYParams
-from neuralop.data.datasets.mixed import get_data_loader
+from neuralop.data.datasets.mixed import get_data_val_test_loader
 from compression.utils.evaluation_util import evaluate_model, compare_models
 import os, sys, time
 import argparse
@@ -39,12 +39,8 @@ fno_model = fno(params).to(device)
 checkpoints = torch.load("models/ckpt_best.tar", map_location='cpu', weights_only=False)  
 fno_model.load_state_dict(checkpoints['model_state'])
 fno_model.eval()
-#print(fno_model)
-print("Original Model Layers:")
-for name, layer in fno_model.named_modules():
-    print(f"{name}: {layer}")
 
-train_loader, test_loaders, data_processor = get_data_loader(params,
+validation_dataloaders, test_loaders, data_processor = get_data_val_test_loader(params,
                                                                   params.test_path, 
                                                                   dist.is_initialized(), 
                                                                   train=False, 
@@ -60,7 +56,22 @@ train_loader, test_loaders, data_processor = get_data_loader(params,
 # )
 # pruned_model = pruned_model.to(device)
 
-# lowrank_model = CompressedModel(
+lowrank_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: SVDLowRank(model, 
+                                                   rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+                                                   min_rank=1,
+                                                   max_rank=128, # option = [8, 16, 32, 64, 128, 256]
+                                                   is_full_rank=False,
+                                                   is_compress_conv1d=False,
+                                                   is_compress_FC=False,
+                                                   is_compress_spectral=True),
+    create_replica=True
+)
+
+lowrank_model = lowrank_model.to(device)
+
+# dynamic_quant_model = CompressedModel(
 #     model=fno_model,
 #     compression_technique=lambda model: SVDLowRank(model, 
 #                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]

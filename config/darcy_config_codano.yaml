@@ -20,42 +20,40 @@ default: &DEFAULT
     output_variable_codimension: 1
     hidden_variable_codimension: 2
     lifting_channels: 4
-    use_positional_encoding: false
-    positional_encoding_dim: 1
+    use_positional_encoding: true
+    positional_encoding_dim: 2
     positional_encoding_modes: [8, 8]
     use_horizontal_skip_connection: true
     static_channel_dim: 0
     horizontal_skips_map: {3: 1, 4: 0}
     variable_ids: ["a1"]
     n_layers: 5
-    n_heads: [2, 2, 2, 2, 2]
-    n_modes: [[8, 8], [8, 8], [8, 8], [8, 8], [8, 8]]
+    n_heads: [32, 32, 32, 32, 32]
+    n_modes: [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]]
     attention_scaling_factors: [0.5, 0.5, 0.5, 0.5, 0.5]
-    per_layer_scaling_factors: [[1, 1], [0.5, 0.5], [1, 1], [2, 2], [1, 1]]
+    per_layer_scaling_factors: [[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]]
     enable_cls_token: false
 
   # Optimizer
   opt:
     n_epochs: 100
-    learning_rate: 5e-3
-    training_loss: 'h1'
+    learning_rate: 5e-4
+    training_loss: 'l2'
     weight_decay: 1e-4
     amp_autocast: False
 
-    scheduler_T_max: 500
-    scheduler_patience: 5
-    scheduler: 'StepLR'
-    step_size: 60
-    gamma: 0.5
+    scheduler_T_max: 100
+    scheduler: 'CosineAnnealingLR'
+    eta_min: 1e-6
 
   # Dataset related
   data:
     batch_size: 16
-    n_train: 1000
-    train_resolution: 16
-    n_tests: [100, 50]
-    test_resolutions: [16, 32]
-    test_batch_sizes: [16, 16]
+    n_train: 10000
+    train_resolution: 128
+    n_tests: [200]
+    test_resolutions: [128]
+    test_batch_sizes: [8]
     encode_input: True
     encode_output: False
 

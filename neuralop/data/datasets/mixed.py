@@ -10,6 +10,49 @@ import glob
 import torch
 import random
 import numpy as np
+from torch.utils.data import random_split
+
+def get_data_val_test_loader(params, location, distributed, val_ratio = 0.2, train=True, pack=False):
+    transform = torch.from_numpy
+    dataset = PDESolns(params, location, transform, train)
+    sampler = DistributedSampler(dataset, shuffle=train) if distributed else None
+    if train:
+        batch_size = params.local_batch_size
+    else:
+        batch_size = params.local_valid_batch_size
+    if not pack:
+        validation_dataloader = {}
+        test_dataloader = {}
+        total_size = len(dataset)
+        val_size = int(total_size * val_ratio)
+        test_size = total_size - val_size
+        val_dataset, test_dataset = random_split(dataset, [val_size, test_size])
+
+        validation_dataloader[128] = DataLoader(val_dataset,
+                        batch_size=int(batch_size),
+                        num_workers=0,
+                        shuffle=True,#(sampler is None),
+                        sampler=sampler,
+                        drop_last=True,
+                        pin_memory=torch.cuda.is_available())
+
+        test_dataloader[128] = DataLoader(test_dataset,
+                                batch_size=int(batch_size),
+                                num_workers=0,
+                                shuffle=False,#(sampler is None),
+                                sampler=sampler,
+                                drop_last=True,
+                                pin_memory=torch.cuda.is_available())
+        
+    else:
+        # data is small, pack it all onto the gpu
+        X = dataset.data[:,0:dataset.in_channels]
+        y = dataset.data[:,dataset.in_channels:]
+        X = torch.tensor(X, requires_grad=True).float().to(params.device)
+        y = torch.tensor(y, requires_grad=True).float().to(params.device)
+        tensor_dataset = TensorDataset(X, y)
+        dataloader = torch.utils.data.DataLoader(tensor_dataset, batch_size=int(batch_size), shuffle=True)
+    return validation_dataloader, test_dataloader, None
 
 # from original codes
 def get_data_loader(params, location, distributed, train=True, pack=False):
@@ -21,7 +64,6 @@ def get_data_loader(params, location, distributed, train=True, pack=False):
     else:
         batch_size = params.local_valid_batch_size
     if not pack:
-        dataloader = {}
         dataloader[128] = DataLoader(dataset,
                                 batch_size=int(batch_size),
                                 num_workers=0,

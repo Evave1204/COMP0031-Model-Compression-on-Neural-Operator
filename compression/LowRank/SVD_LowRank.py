@@ -9,11 +9,15 @@ import numpy as np
 from neuralop.data.transforms.data_processors import MGPatchingDataProcessor
 from neuralop.training.training_state import load_training_state
 from neuralop.layers.spectral_convolution_lowrank import DoubleSpectralConv
+from neuralop.layers.foundation_fno_layers_lowrank import SpectralConv2dV2_lowrank
+from neuralop.layers.fino_2D_lowrank import SpectralConvKernel2d_lowrank
+from neuralop.layers.fino_2D import SpectralConvKernel2d
 import torch
 import torch.nn as nn
 from typing import Dict
 from compression.base import CompressionTechnique
 import copy
+from tltorch.factorized_tensors.core import FactorizedTensor
 
 import torch
 import torch.nn as nn
@@ -34,7 +38,7 @@ class SVDLowRank:
                  max_rank=32,
                  is_full_rank = False,
                  is_compress_conv1d=True, 
-                 is_comrpess_spectral=True,
+                 is_compress_spectral=True,
                  is_compress_FC=True):
         
         self.rank_ratio = rank_ratio  
@@ -45,7 +49,7 @@ class SVDLowRank:
         self.compressed_params = 0
         self.is_full_rank = is_full_rank
         self.is_compress_conv1d = is_compress_conv1d
-        self.is_comrpess_spectral = is_comrpess_spectral
+        self.is_compress_spectral = is_compress_spectral
         self.is_compress_FC = is_compress_FC
         self.compressed_layers = {}
     
@@ -54,7 +58,8 @@ class SVDLowRank:
             raise ValueError("NaN/Inf")
 
         if weight.dim() != 2:
-            weight = weight.view(weight.size(0), -1) 
+            weight = weight.reshape(weight.size(0), -1)
+            #weight = weight.view(weight.size(0), -1) 
         
         weight = weight.cpu().float()
 
@@ -63,6 +68,23 @@ class SVDLowRank:
         valid_indices = torch.where(energy <= self.rank_ratio)[0]
         rank = valid_indices.numel() + 1 if valid_indices.numel() > 0 else 1
         return max(min(rank, self.max_rank), self.min_rank)
+
+    def _get_unified_rank(self, W, sample_num=4):
+        """
+        Sample a few frequency slices from W (shape: [modes, modes, C_in, C_out])
+        and compute their target ranks using _get_target_rank.
+        Return the maximum rank from the samples.
+        """
+        modes1, modes2, _, _ = W.shape
+        sample_indices = [(i, j) for i in range(0, modes1, max(1, modes1//sample_num))
+                            for j in range(0, modes2, max(1, modes2//sample_num))]
+        ranks = []
+        for i, j in sample_indices:
+            slice_ij = W[i, j]  # shape: (C_in, C_out)
+            r_temp = self._get_target_rank(slice_ij)
+            ranks.append(r_temp)
+        return max(ranks) if ranks else 64
+
     
     def compress_FC(self, layer, name):
         original_weight = layer.weight.data
@@ -161,7 +183,6 @@ class SVDLowRank:
             self.compressed_layers[name] = seq
 
     def compress_spectral_conv(self, layer, name):
-        # TODO: There are one more calculations at single spectral layers
         """
         Compress a SpectralConv layer by applying low-rank SVD on channel dimensions.
         """
@@ -177,7 +198,6 @@ class SVDLowRank:
             _, rank = U.shape 
         else:
             rank = self._get_target_rank(weight)
-
         U_trunc = U[:, :rank]
         S_trunc = S[:rank].to(torch.complex64)
         Vh_trunc = Vh[:rank, :]
@@ -199,6 +219,158 @@ class SVDLowRank:
             self.compressed_layers[name] = new_layer
 
 
+    def compress_foundation_spectral_conv(self, layer, name):
+        """
+        Compress the foundation spectral convolution layer using low-rank approximation.
+        The original weight has shape: (C_in, C_out, modes, modes, 2).
+        This implementation avoids explicit m, n loops by merging the frequency dimensions
+        and performing batched SVD. Note that a unified truncation rank is required for all frequency slices.
+        """
+        # Process weight1 (for branch 1)
+        weight1 = layer.weights1  # shape: (C_in, C_out, modes1, modes2, 2)
+        C_in, C_out, modes1, modes2, _ = weight1.shape
+
+        # Convert weight1 to a complex tensor and permute dimensions to merge frequency dimensions:
+        weight1_complex = torch.view_as_complex(weight1)  # shape: (C_in, C_out, modes1, modes2)
+        W1 = weight1_complex.permute(2, 3, 0, 1)            # shape: (modes1, modes2, C_in, C_out)
+        
+        # Set a unified truncation rank for branch1 (must be the same for all frequency slices)
+        # TODO:: auto-adapt depending on rank_ratio
+        # final_rank1 = 64  # or: final_rank1 = self._get_target_rank(W1.reshape(modes1*modes2, C_in, C_out))
+        final_rank1 = self._get_unified_rank(W1)
+        
+        # Batched SVD for weight1:
+        U1, S1, Vh1 = torch.linalg.svd(W1, full_matrices=False)
+        # U1: (modes1, modes2, C_in, min(C_in,C_out))
+        # S1: (modes1, modes2, min(C_in,C_out))
+        # Vh1: (modes1, modes2, min(C_in,C_out), C_out)
+        
+        # Truncate to final_rank1:
+        U1_trunc = U1[:, :, :, :final_rank1]         # (modes1, modes2, C_in, final_rank1)
+        S1_trunc = S1[:, :, :final_rank1]              # (modes1, modes2, final_rank1)
+        Vh1_trunc = Vh1[:, :, :final_rank1, :]           # (modes1, modes2, final_rank1, C_out)
+        
+        # Scale U1 by singular values (broadcasting S1_trunc)
+        U1_trunc_scaled = U1_trunc * S1_trunc.unsqueeze(-2)  # (modes1, modes2, C_in, final_rank1)
+        
+        # Rearrange dimensions to obtain U1 and V1 factors with expected shapes:
+        # Expected U1: (C_in, final_rank1, modes1, modes2, 2)
+        U1_factor = U1_trunc_scaled.permute(2, 3, 0, 1)  # (C_in, final_rank1, modes1, modes2)
+        U1_factor = torch.view_as_real(U1_factor)         # (C_in, final_rank1, modes1, modes2, 2)
+        
+        # Expected V1: (final_rank1, C_out, modes1, modes2, 2)
+        V1_factor = Vh1_trunc.permute(2, 3, 0, 1)         # (final_rank1, C_out, modes1, modes2)
+        V1_factor = torch.view_as_real(V1_factor.resolve_conj())  # Resolve conjugation before conversion
+
+        # Process weight2 (for branch 2)
+        weight2 = layer.weights2  # shape: (C2_in, C2_out, modes1_b, modes2_b, 2)
+        C2_in, C2_out, modes1_b, modes2_b, _ = weight2.shape
+
+        weight2_complex = torch.view_as_complex(weight2)   # shape: (C2_in, C2_out, modes1_b, modes2_b)
+        W2 = weight2_complex.permute(2, 3, 0, 1)             # shape: (modes1_b, modes2_b, C2_in, C2_out)
+        
+        # Set a unified truncation rank for branch2:
+        final_rank2 = self._get_unified_rank(W2)
+        
+        # Batched SVD for weight2:
+        U2, S2, Vh2 = torch.linalg.svd(W2, full_matrices=False)
+        # U2: (modes1_b, modes2_b, C2_in, min(C2_in,C2_out))
+        # S2: (modes1_b, modes2_b, min(C2_in,C2_out))
+        # Vh2: (modes1_b, modes2_b, min(C2_in,C2_out), C2_out)
+        
+        U2_trunc = U2[:, :, :, :final_rank2]         # (modes1_b, modes2_b, C2_in, final_rank2)
+        S2_trunc = S2[:, :, :final_rank2]              # (modes1_b, modes2_b, final_rank2)
+        Vh2_trunc = Vh2[:, :, :final_rank2, :]           # (modes1_b, modes2_b, final_rank2, C2_out)
+        
+        U2_trunc_scaled = U2_trunc * S2_trunc.unsqueeze(-2)  # (modes1_b, modes2_b, C2_in, final_rank2)
+        
+        # Rearrange dimensions to obtain U2 and V2 factors:
+        # Expected U2: (C2_in, final_rank2, modes1_b, modes2_b, 2)
+        U2_factor = U2_trunc_scaled.permute(2, 3, 0, 1)  # (C2_in, final_rank2, modes1_b, modes2_b)
+        U2_factor = torch.view_as_real(U2_factor)         # (C2_in, final_rank2, modes1_b, modes2_b, 2)
+        
+        # Expected V2: (final_rank2, C2_out, modes1_b, modes2_b, 2)
+        V2_factor = Vh2_trunc.permute(2, 3, 0, 1)         # (final_rank2, C2_out, modes1_b, modes2_b)
+        V2_factor = torch.view_as_real(V2_factor.resolve_conj())
+
+        # Create the new low-rank spectral convolution layer.
+        # Here, the new layer expects unified ranks for both branches.
+        new_layer = SpectralConv2dV2_lowrank(in_channels=C_in,
+                                            out_channels=C_out,
+                                            modes1=modes1,
+                                            modes2=modes2,
+                                            rank1=final_rank1,
+                                            rank2=final_rank2)
+        new_layer.U1 = nn.Parameter(U1_factor)
+        new_layer.V1 = nn.Parameter(V1_factor)
+        new_layer.U2 = nn.Parameter(U2_factor)
+        new_layer.V2 = nn.Parameter(V2_factor)
+        
+        # If the original layer has a bias, assign it accordingly (if needed)
+        # new_layer.bias = layer.bias
+
+        # Save the compressed layer
+        self.compressed_layers[name] = new_layer
+    
+    # for foundation codano
+    # large tensor tried
+    def compress_spectral_conv_2d_kernel(self, layer, name):
+        """
+        Compress a SpectralConv layer by applying low-rank SVD on channel dimensions.
+        """
+        weights = [] 
+        new_ranks = []     
+        for weight in layer.weight:
+            original_weight = weight.to_tensor()
+            C_in, C_out, H, W = original_weight.shape
+            weight = original_weight.permute(1,2,3,0).reshape(C_out*H*W, C_in)
+            U, S, Vh = torch.linalg.svd(weight, full_matrices=False)
+            if self.is_full_rank:
+                _, rank = U.shape 
+            else:
+                rank = self._get_target_rank(weight)
+
+            U_trunc = U[:, :rank]
+            S_trunc = S[:rank].to(torch.complex64)
+            Vh_trunc = Vh[:rank, :]
+
+
+            weight1 = (Vh_trunc.T).reshape(C_in, rank, 1, 1).expand(-1, -1, H, W)
+
+            weight2 = (U_trunc @ torch.diag(S_trunc)).reshape(C_out, H, W, rank).permute(3, 0, 1, 2)
+
+            total_n_params = weight1.numel() + weight2.numel()
+            if total_n_params > original_weight.numel():
+                weights.append(original_weight)
+                new_ranks.append(0)
+            else:
+                weights.append((weight1, weight2))
+                new_ranks.append(rank)
+
+
+        new_layer = SpectralConvKernel2d_lowrank(in_channels=C_in,
+                                    out_channels=C_out,
+                                    n_modes=layer.n_modes,
+                                    ranks=new_ranks,
+                                    n_layers=layer.n_layers,
+                                    output_scaling_factor=layer.output_scaling_factor,
+                                    rank=layer.rank,
+                                    factorization=layer.factorization,
+                                    implementation=layer.implementation,
+                                    transform_type=layer.transform_type)
+        
+        with torch.no_grad():
+            for i in range(len(new_ranks)):
+                if new_ranks[i] != 0:
+                    weight1, weight2 = weights[i]
+                    new_layer.weight[i][0].tensor.data.copy_(weight1)
+                    new_layer.weight[i][1].tensor.data.copy_(weight2)
+                else:
+                    new_layer.weight[i].tensor.data.copy_(weights[i])
+            new_layer.bias = layer.bias
+        self.compressed_layers[name] = new_layer
+
+
     def compress(self):
         """
         Iterates through the model and applies low-rank decomposition.
@@ -213,9 +385,14 @@ class SVDLowRank:
             elif self.is_compress_FC and isinstance(module, nn.Linear):
                 self.compress_FC(module, name)
             # Handle SpectralConv (DenseTensor) 
-            elif self.compress_spectral_conv and "SpectralConv" in type(module).__name__:
+            elif self.is_compress_spectral and ("SpectralConv" == type(module).__name__):
                 if hasattr(module, "weight"):
                     self.compress_spectral_conv(module, name)
+            elif self.is_compress_spectral and ("SpectralConv2dV2" == type(module).__name__):
+                self.compress_foundation_spectral_conv(module,name)
+            elif self.is_compress_spectral and ("SpectralConvKernel2d" == type(module).__name__):
+                self.compress_spectral_conv_2d_kernel(module, name)
+                break
 
         # Replace original layers with compressed versions
         for name, new_layer in self.compressed_layers.items():
@@ -244,74 +421,3 @@ class SVDLowRank:
             "sparsity": sparsity,
             "compressed_layers": list(self.compressed_layers.keys())
         }
-
-    
-
-
-    # def _is_compressible(self, layer: nn.Module) -> bool:
-    #     """Check if layer is a compressible linear layer"""
-    #     return isinstance(layer, (nn.Linear, nn.Conv1d, nn.Conv2d))
-    
-    # def _get_target_rank(self, weight: torch.tensor) -> int:
-    #     # S includes all eigenvalues, S = [σ₁, σ₂, ..., σₙ] where σ₁ ≥ σ₂ ≥ ... ≥ σₙ
-    #     _, S, _ = torch.svd(weight.float())
-    #     # E = total_energy = σ₁^2 + σ₂^2 + ... + σₙ^2
-    #     # energy = the energy of each eigenvalue = [σ₁/E, σ₂/E, ..., σₙ/E]
-    #     energy = (S**2).cumsum(dim=0) / (S ** 2).sum()
-    #     # take suitable rank index : energy < rank ratio
-    #     index = torch.where(energy <= self.rank_ratio)[0]
-    #     # if no suitable indexs -> new rank = 1, where the eigenvalue is σ₁
-    #     if len(index) == 0:
-    #         new_rank = 1
-    #     # if yes, new rank = max_index + 1, the index is continuous ... [0,1] | [0,1,2,..,max]
-    #     else:
-    #         new_rank = index.max().item() + 1
-    #     # make sure the final rank >= min_rank, we set
-    #     return max(new_rank, self.min_rank)
-        
-    # def _compress_linear(self, layer, name):
-    #     weight = layer.weight.data
-    #     U,S,V = torch.svd(weight.float())
-    #     target_rank = self._get_target_rank(weight=weight)
-    #     # compress W to be U@S,V
-    #     self.compressed_layers[name] = (
-    #         U[:, :target_rank] @ torch.diag(S[:target_rank]),
-    #         V[:, :target_rank]
-    #     )
-    #     # Repalce the weight and bias
-    #     layer.weight = nn.Parameter(self.compressed_layers[name][0])
-    #     layer.bias = nn.Parameter(layer.bias.data) if layer.bias else None
-    # def _compress_conv2d(self, layer, name):
-    #     # weight = [out_channel, in_channel, H, W]
-    #     weight = layer.weight.data
-    #     # flatten weight = [out_channel, in_channel*H*W]
-    #     flatten_weight = weight.view(weight.size(0), -1)
-    #     # U = [out_channel, out_channel]
-    #     # S = [min(out_channels), in_channel * H * W]
-    #     # V = [in_channel * H * W, in_channel * H * W]
-    #     U,S,V = torch.svd(flatten_weight.float())
-    #     target_rank = self._get_target_rank(weight=flatten_weight)
-    #     # U_rank = [out_channel, target_rank]
-    #     # V_rank = [in_channel * H * W, target_rank]
-    #     U_rank = U[:, :target_rank] @ torch.diag(S[:target_rank])
-    #     V_rank = V[:, :target_rank]
-    #     # reshape U_rank => U_rank= [out_chanenel, target_rank, 1, 1]
-    #     U_rank = U_rank.unsqueeze(-1).unsqueeze(-1)
-    #     # reshape V_rank => V_rank = [target_rank, in_channel, H, W]
-    #     V_rank = V_rank.view(target_rank, weight.size(1), weight.size(2), weight.size(3))
-
-    #     # build 2 conv2d layers
-    #     self.compressed_layers[name] = (
-    #         # by first conv2d: 
-    #         # input_size(batch_size, weight_size(1)=input_channel, h, w) 
-    #         # => output_size(batch_size, target_rank, h, w) 
-    #         nn.Conv2d(weight.size(1), target_rank, kernel_size=1, bias=False),
-    #         # by second conv2d:
-    #         # input_size(batch_size, target_rank, h, w)
-    #         # => output_size(batch_size, weight_size(0)=output_channel, O_h, O_w)
-    #         nn.Conv2d(target_rank, weight.size(0), kernel_size=layer.kernel_size,
-    #                   stride=layer.stride, padding=layer.padding, bias=True)
-    #     )
-    #     self.compressed_layers[name][0].weight = nn.Parameter(V_rank)
-    #     self.compressed_layers[name][1].weight = nn.Parameter(U_rank)
-    #     self.compressed_layers[name][1].bias = nn.Parameter(layer.bias.data) if layer.bias else None

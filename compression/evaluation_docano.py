@@ -23,15 +23,17 @@ fno_model = CODANO(
     horizontal_skips_map={3: 1, 4: 0},
 
     n_layers=5,
-    n_heads=[2, 2, 2, 2, 2],
-    n_modes=[[8, 8], [8, 8], [8, 8], [8, 8], [8, 8]],
+    n_heads=[32, 32, 32, 32, 32],
+    n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
     attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
-    per_layer_scaling_factors=[[1, 1], [0.5, 0.5], [1, 1], [2, 2], [1, 1]],
+    per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
 
     static_channel_dim=0,
     variable_ids=["a1"],
     enable_cls_token=False
 )
+
+
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 cpu_device = torch.device('cpu')

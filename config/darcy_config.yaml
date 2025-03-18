@@ -17,11 +17,11 @@ default: &DEFAULT
   # FNO related
   tfno2d:
     data_channels: 1
-    n_modes_height: 16
-    n_modes_width: 16
-    hidden_channels: 32
+    n_modes_height: 32
+    n_modes_width: 32
+    hidden_channels: 64
     projection_channel_ratio: 2
-    n_layers: 4
+    n_layers: 5
     domain_padding: None #0.078125
     domain_padding_mode: 'one-sided' #symmetric
     fft_norm: 'forward'
@@ -43,26 +43,24 @@ default: &DEFAULT
 
   # Optimizer
   opt:
-    n_epochs: 300
-    learning_rate: 5e-3
-    training_loss: 'h1'
+    n_epochs: 100
+    learning_rate: 5e-4
+    training_loss: 'l2'
     weight_decay: 1e-4
     amp_autocast: False
 
-    scheduler_T_max: 500 # For cosine only, typically take n_epochs
-    scheduler_patience: 5 # For ReduceLROnPlateau only
-    scheduler: 'StepLR' # Or 'CosineAnnealingLR' OR 'ReduceLROnPlateau'
-    step_size: 60
-    gamma: 0.5
+    scheduler_T_max: 100
+    scheduler: 'CosineAnnealingLR'
+    eta_min: 1e-6
 
   # Dataset related
   data:
     batch_size: 16
-    n_train: 1000
-    train_resolution: 16
-    n_tests: [100, 50]
-    test_resolutions: [16, 32]
-    test_batch_sizes: [16, 16]
+    n_train: 10000
+    train_resolution: 128
+    n_tests: [1000]
+    test_resolutions: [128]
+    test_batch_sizes: [16]
     encode_input: True
     encode_output: False
 

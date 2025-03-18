@@ -7,12 +7,12 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from ..layers.embeddings import GridEmbeddingND, GridEmbedding2D
-from ..layers.spectral_convolution import SpectralConv
-from ..layers.padding import DomainPadding
-from ..layers.fno_block import FNOBlocks
-from ..layers.channel_mlp import ChannelMLP
-from ..layers.complex import ComplexValued
+from neuralop.layers.embeddings import GridEmbeddingND, GridEmbedding2D
+from neuralop.layers.spectral_convolution import SpectralConv
+from neuralop.layers.padding import DomainPadding
+from neuralop.layers.fno_block import FNOBlocks
+from neuralop.layers.channel_mlp import ChannelMLP
+from neuralop.layers.complex import ComplexValued
 from .base_model import BaseModel
 
 class FNO(BaseModel, name='FNO'):

@@ -5,10 +5,10 @@ import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.UniformQuant.uniform_quant import UniformQuantisation
+from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
-import matplotlib.pyplot as plt
 
 deeponet_model = DeepONet(
     train_resolution=128,
@@ -28,7 +28,7 @@ deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resol
 deeponet_model.eval()
 deeponet_model = deeponet_model.to(device)
 
-train_loader, test_loaders, data_processor = load_darcy_flow_small(
+validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
     n_train=1000,
     batch_size=16,
     test_resolutions=[128],
@@ -38,7 +38,7 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_output=False,
 )
 
-'''pruned_model = CompressedModel(
+pruned_model = CompressedModel(
     model=deeponet_model,
     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
     create_replica=True
@@ -47,19 +47,19 @@ pruned_model = pruned_model.to(device)
 
 lowrank_model = CompressedModel(
     model=deeponet_model,
-    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.5,
-                                                 min_rank=4, max_rank=128),
+    compression_technique=lambda model: SVDLowRank(model, 
+                                                   rank_ratio=0.5, # option = [0.2, 0.4, 0.6, 0.8]
+                                                   min_rank=128, # for deeponet, its important to set min_rank to be higher
+                                                   max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                   is_full_rank=False,
+                                                   is_compress_conv1d=False,
+                                                   is_compress_FC=True,
+                                                   is_comrpess_spectral=False),
     create_replica=True
 )
-lowrank_model = lowrank_model.to(device)'''
+lowrank_model = lowrank_model.to(device)
 
-quantised_model = CompressedModel(
-    model=deeponet_model,
-    compression_technique=lambda model: UniformQuantisation(model, num_bits=8),
-    create_replica=True
-)
-
-'''print("Pruning.....")
+print("Pruning.....")
 compare_models(
     model1=deeponet_model,
     model2=pruned_model,
@@ -68,41 +68,25 @@ compare_models(
     device=device
 )
 
+print("\n"*2)
 print("Low Ranking.....")
 lowrank_compare = compare_models(
     model1=deeponet_model,
     model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device=device
-)'''
+    device=device,
+    track_performance = True
+)
+'''
 
-print("Quantising.....")
-quantised_compare = compare_models(
-    model1=deeponet_model,
-    model2=quantised_model,
+# Evaluate both models on CPU
+print("\n"*2)
+print("Dynamic Quantization.....")
+compare_models(
+    model1=deeponet_model,               # The original model (it will be moved to CPU in evaluate_model)
+    model2=dynamic_quant_model,     # The dynamically quantized model
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device
 )
-
-print(quantised_compare)
-
-def plot_accuracy(*args):
-    models = ['Original', 'Quantised']
-    accuracies = [1-args[0]['128_base']['l2_loss']]
-    for each in args:
-        accuracies.append(1-each['128_compressed']['l2_loss'])
-
-    plt.figure(figsize=(10, 6))
-    #plt.bar(models, accuracies, color=['blue', 'orange'])
-    print(models, accuracies)
-    plt.plot(models, accuracies, color='blue')
-    plt.xlabel('Model Type')
-    plt.ylabel('Accuracy')
-    plt.title('Model Accuracies Comparison')
-    plt.ylim(0, 1)  # Assuming accuracy is between 0 and 1
-    plt.show()
-
-# Call the plot_accuracy function with the comparison results
-plot_accuracy(quantised_compare)

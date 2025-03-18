@@ -226,6 +226,9 @@ class SVDLowRank:
         This implementation avoids explicit m, n loops by merging the frequency dimensions
         and performing batched SVD. Note that a unified truncation rank is required for all frequency slices.
         """
+        fac_weight1 = True
+        fac_weight2 = True
+
         # Process weight1 (for branch 1)
         weight1 = layer.weights1  # shape: (C_in, C_out, modes1, modes2, 2)
         C_in, C_out, modes1, modes2, _ = weight1.shape
@@ -262,6 +265,8 @@ class SVDLowRank:
         V1_factor = Vh1_trunc.permute(2, 3, 0, 1)         # (final_rank1, C_out, modes1, modes2)
         V1_factor = torch.view_as_real(V1_factor.resolve_conj())  # Resolve conjugation before conversion
 
+        total_n_params1 = U1_factor.numel() + V1_factor.numel()
+
         # Process weight2 (for branch 2)
         weight2 = layer.weights2  # shape: (C2_in, C2_out, modes1_b, modes2_b, 2)
         C2_in, C2_out, modes1_b, modes2_b, _ = weight2.shape
@@ -292,7 +297,15 @@ class SVDLowRank:
         # Expected V2: (final_rank2, C2_out, modes1_b, modes2_b, 2)
         V2_factor = Vh2_trunc.permute(2, 3, 0, 1)         # (final_rank2, C2_out, modes1_b, modes2_b)
         V2_factor = torch.view_as_real(V2_factor.resolve_conj())
+        total_n_params2 = U2_factor.numel() + V2_factor.numel()
 
+        # replace the layer
+        if (total_n_params1 >= weight1.numel()):
+            print("yes")
+            fac_weight1 = False
+        if (total_n_params2 >= weight2.numel()):
+            print("yes")
+            fac_weight2 = False
         # Create the new low-rank spectral convolution layer.
         # Here, the new layer expects unified ranks for both branches.
         new_layer = SpectralConv2dV2_lowrank(in_channels=C_in,
@@ -300,18 +313,26 @@ class SVDLowRank:
                                             modes1=modes1,
                                             modes2=modes2,
                                             rank1=final_rank1,
-                                            rank2=final_rank2)
-        new_layer.U1 = nn.Parameter(U1_factor)
-        new_layer.V1 = nn.Parameter(V1_factor)
-        new_layer.U2 = nn.Parameter(U2_factor)
-        new_layer.V2 = nn.Parameter(V2_factor)
-        
+                                            rank2=final_rank2,
+                                            fac_weight1=fac_weight1,
+                                            fac_weight2=fac_weight2)
+        if fac_weight1:    
+            new_layer.U1 = nn.Parameter(U1_factor)
+            new_layer.V1 = nn.Parameter(V1_factor)
+        else:
+            new_layer.weights1 = layer.weights1
+        if fac_weight2:
+            new_layer.U2 = nn.Parameter(U2_factor)
+            new_layer.V2 = nn.Parameter(V2_factor)
+        else:
+            new_layer.weights2 = layer.weights2
+            
         # If the original layer has a bias, assign it accordingly (if needed)
         # new_layer.bias = layer.bias
 
         # Save the compressed layer
         self.compressed_layers[name] = new_layer
-    
+
     # for foundation codano
     # large tensor tried
     def compress_spectral_conv_2d_kernel(self, layer, name):

@@ -3,7 +3,7 @@ import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
-from compression.utils import evaluate_model, compare_models
+from compression.utils.evaluation_util import evaluate_model, compare_models
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -61,35 +61,46 @@ for ratio in pruning_ratios:
         test_loaders=test_loaders,
         data_processor=data_processor,
         device=device,
-        verbose=False
+        verbose=False,
+        track_performance=True
     )
     results_by_ratio[ratio] = results
 
-plt.figure(figsize=(10, 6))
+metrics = list(next(iter(next(iter(results_by_ratio.values())).values())).keys())
+num_metrics = len(metrics)
+num_cols = 2
+num_rows = (num_metrics + num_cols - 1) // num_cols
+
+fig, axes = plt.subplots(num_rows, num_cols, figsize=(15, 5 * num_rows))
+axes = axes.flatten()
+
 markers = ['o', 's']
 colors = ['#2ecc71', '#e74c3c']
 
-for resolution in test_loaders.keys():
-    l2_errors = [((results_by_ratio[ratio][f"{resolution}_compressed"]['l2_loss'] / 
-                   results_by_ratio[ratio][f"{resolution}_base"]['l2_loss'] - 1) * 100)
-                 for ratio in pruning_ratios]
-    
-    h1_errors = [((results_by_ratio[ratio][f"{resolution}_compressed"]['h1_loss'] / 
-                   results_by_ratio[ratio][f"{resolution}_base"]['h1_loss'] - 1) * 100)
-                 for ratio in pruning_ratios]
-    
-    plt.plot(np.array(pruning_ratios) * 100, l2_errors, 
-             f'-{markers[0]}', label=f'L2 Loss ({resolution}x{resolution})', 
-             color=colors[0], alpha=0.7)
-    plt.plot(np.array(pruning_ratios) * 100, h1_errors, 
-             f'-{markers[1]}', label=f'H1 Loss ({resolution}x{resolution})', 
-             color=colors[1], alpha=0.7)
+for i, metric in enumerate(metrics):
+    for resolution in test_loaders.keys():
+        base_values = [results_by_ratio[ratio][f"{resolution}_base"][metric] for ratio in pruning_ratios]
+        compressed_values = [results_by_ratio[ratio][f"{resolution}_compressed"][metric] for ratio in pruning_ratios]
+        
+        ax = axes[i]
+        ax.plot(np.array(pruning_ratios) * 100, base_values, 
+                f'-{markers[0]}', label=f'Base {metric} ({resolution}x{resolution})', 
+                color=colors[0], alpha=0.7)
+        ax.plot(np.array(pruning_ratios) * 100, compressed_values, 
+                f'-{markers[1]}', label=f'Compressed {metric} ({resolution}x{resolution})', 
+                color=colors[1], alpha=0.7)
+        
+        ax.set_xlabel('Pruning Ratio (%)')
+        ax.set_ylabel(metric.replace('_', ' ').title())
+        ax.set_title(f'Comparison of {metric.replace("_", " ").title()}')
+        ax.legend()
+        ax.grid(True, linestyle='--', alpha=0.7)
 
-plt.xlabel('Pruning Ratio (%)')
-plt.ylabel('Relative Error Increase (%)')
-plt.title('Model Performance vs Magnitude-based Pruning Ratio for Darcy Equation on FNO')
-plt.grid(True, linestyle='--', alpha=0.7)
-plt.legend()
+# Hide any unused subplots
+for j in range(i + 1, len(axes)):
+    fig.delaxes(axes[j])
+
 plt.tight_layout()
+plt.subplots_adjust(hspace=0.4, wspace=0.4)
 plt.savefig('fno_pruning_performance.png', dpi=300, bbox_inches='tight')
 plt.show()

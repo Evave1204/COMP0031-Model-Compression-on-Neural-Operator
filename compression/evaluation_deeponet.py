@@ -1,5 +1,3 @@
-import sys
-sys.path.append("C:\\Users\\ahmed\\UCL-Ibsa-Ahmed\\Year_3\\COMP0030-31\\COMP0031-Model-Compression-on-Neural-Operator")
 from neuralop.models import DeepONet
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
@@ -7,7 +5,7 @@ from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
-from neuralop.data.datasets import load_darcy_flow_small
+from neuralop.data.datasets import load_darcy_flow_small, load_darcy_flow_small_validation_test
 from compression.utils import evaluate_model, compare_models
 
 deeponet_model = DeepONet(
@@ -54,7 +52,7 @@ lowrank_model = CompressedModel(
                                                    is_full_rank=False,
                                                    is_compress_conv1d=False,
                                                    is_compress_FC=True,
-                                                   is_comrpess_spectral=False),
+                                                   is_compress_spectral=False),
     create_replica=True
 )
 lowrank_model = lowrank_model.to(device)
@@ -78,15 +76,14 @@ lowrank_compare = compare_models(
     device=device,
     track_performance = True
 )
-'''
 
-# Evaluate both models on CPU
-print("\n"*2)
-print("Dynamic Quantization.....")
-compare_models(
-    model1=deeponet_model,               # The original model (it will be moved to CPU in evaluate_model)
-    model2=dynamic_quant_model,     # The dynamically quantized model
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device
-)
+# # Evaluate both models on CPU
+# print("\n"*2)
+# print("Dynamic Quantization.....")
+# compare_models(
+#     model1=deeponet_model,               # The original model (it will be moved to CPU in evaluate_model)
+#     model2=dynamic_quant_model,     # The dynamically quantized model
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device
+# )

@@ -2,10 +2,10 @@ from neuralop.models.codano import CODANO
 
 
 import torch
-from compression.quantization.static_quantization import StaticQuantization
+from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
-from compression.utils import evaluate_model, compare_models
+from compression.utils.evaluation_util import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 import matplotlib.pyplot as plt
 import numpy as np
@@ -62,7 +62,7 @@ data_processor = CODANODataProcessor(
 
 # Quantization processing
 print("\nApplying static quantization...")
-quantization = StaticQuantization(fno_model)
+quantization = DynamicQuantization(fno_model)
 quantization.compress(train_loader)  # Runs prepare, calibrate, and apply quantization
 quantized_model = quantization.quantized_model.to(device)
 
@@ -77,30 +77,39 @@ results = compare_models(
 )
 
 # Plotting results
-plt.figure(figsize=(10, 6))
+metrics = list(next(iter(results.values())).keys())
+num_metrics = len(metrics)
+num_cols = 2
+num_rows = (num_metrics + num_cols - 1) // num_cols
+
+fig, axes = plt.subplots(num_rows, num_cols, figsize=(12, 4 * num_rows))
+axes = axes.flatten()
+
 markers = ['o', 's']
 colors = ['#2ecc71', '#e74c3c']
 
-for resolution in test_loaders.keys():
-    # Extract L2 relative errors
-    l2_error = ((results[f"{resolution}_compressed"]['l2_loss'] / 
-                 results[f"{resolution}_base"]['l2_loss'] - 1) * 100)
-    
-    # Extract H1 relative errors
-    h1_error = ((results[f"{resolution}_compressed"]['h1_loss'] / 
-                 results[f"{resolution}_base"]['h1_loss'] - 1) * 100)
-    
-    # Plot lines
-    plt.plot([100], [l2_error], f'-{markers[0]}', label=f'L2 Loss ({resolution}x{resolution})', 
-             color=colors[0], alpha=0.7)
-    plt.plot([100], [h1_error], f'-{markers[1]}', label=f'H1 Loss ({resolution}x{resolution})', 
-             color=colors[1], alpha=0.7)
+for i, metric in enumerate(metrics):
+    for resolution in test_loaders.keys():
+        base_value = results[f"{resolution}_base"][metric]
+        compressed_value = results[f"{resolution}_compressed"][metric]
+        relative_error_increase = ((compressed_value / base_value - 1) * 100)
+        
+        ax = axes[i]
+        ax.plot([100], [relative_error_increase], f'-{markers[i % 2]}', 
+                label=f'{metric.replace("_", " ").title()} ({resolution}x{resolution})', 
+                color=colors[i % 2], alpha=0.7)
+        
+        ax.set_xlabel('Quantization Applied (Static)')
+        ax.set_ylabel('Relative Error Increase (%)')
+        ax.set_title(f'Comparison of {metric.replace("_", " ").title()}')
+        ax.legend()
+        ax.grid(True, linestyle='--', alpha=0.7)
 
-plt.xlabel('Quantization Applied (Static)')
-plt.ylabel('Relative Error Increase (%)')
-plt.title('Model Performance Before and After Static Quantization (CODANO)')
-plt.grid(True, linestyle='--', alpha=0.7)
-plt.legend()
+# Hide any unused subplots
+for j in range(i + 1, len(axes)):
+    fig.delaxes(axes[j])
+
 plt.tight_layout()
+plt.subplots_adjust(hspace=0.4, wspace=0.4)  # Adjust the spacing between subplots
 plt.savefig('quantization_performance.png', dpi=300, bbox_inches='tight')
 plt.show()

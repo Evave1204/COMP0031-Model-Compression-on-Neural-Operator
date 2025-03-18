@@ -2,6 +2,8 @@ from neuralop.models import CODANO
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
+from compression.quantization.dynamic_quantization import DynamicQuantization
+from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.base import CompressedModel
 from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
 from compression.utils.evaluation_util import evaluate_model, compare_models

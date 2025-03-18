@@ -9,14 +9,15 @@ from neuralop.data.datasets import load_darcy_flow_small
 
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.utils.fno_util import optional_fno
+from compression.utils.collate_graphs import clean_compare, plot_compare
 
-fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="high")
+fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="low")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 fno_model = fno_model.to(device)
 
 
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
-    n_train=1000,
+    n_train=100,
     batch_size=16,
     test_resolutions=[16, 32],
     n_tests=[100, 50],
@@ -33,35 +34,45 @@ pruned_model = CompressedModel(
 )
 pruned_model = pruned_model.to(device)
 
-# lowrank_model = CompressedModel(
-#     model=fno_model,
-#     compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
-#                                                    min_rank=8, max_rank=16),
-#     create_replica=True
-# )
-# lowrank_model = lowrank_model.to(device)
-
-# compare_models(
-#     model1=fno_model,
-#     model2=lowrank_model,
-#     test_loaders=test_loaders,
-#     data_processor=data_processor,
-#     device=device
-# )
-
-quantised_model = CompressedModel(
+lowrank_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
                                                    min_rank=8, max_rank=16),
     create_replica=True
 )
+lowrank_model = lowrank_model.to(device)
 
-compare_models(
+lowrank_compare = compare_models(
     model1=fno_model,
     model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device=device
+    device=device,
+    track_performance=True
 )
 
+quantised_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: UniformQuantisation(model, num_bits=8),
+    create_replica=True
+)
 
+quantised_compare = compare_models(
+    model1=fno_model,
+    model2=quantised_model,
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device,
+    track_performance=True
+)
+
+final_results = {}
+final_results.update(lowrank_compare)
+final_results.update(quantised_compare)
+final_compress_stats = {}
+final_compress_stats.update(lowrank_model.get_compression_stats())
+final_compress_stats.update(quantised_model.get_compression_stats())
+print(clean_compare(final_results))
+print(final_compress_stats)
+exit()
+plot_compare(clean_compare(final_results), lowrank_model.get_compression_stats())

@@ -6,7 +6,7 @@ from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small, load_darcy_flow_small_validation_test
-from compression.utils import evaluate_model, compare_models
+from compression.utils.evaluation_util import evaluate_model, compare_models
 
 deeponet_model = DeepONet(
     train_resolution=128,

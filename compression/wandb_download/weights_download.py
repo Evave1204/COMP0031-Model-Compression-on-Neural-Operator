@@ -15,7 +15,7 @@ artifacts = [
     # "ucl-neural-operator/training/model-deeponet-darcy-128-resolution-2025-03-04-18-53:v0",
     # "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-03-04-20-01:v0",
     'ucl-neural-operator/data/foundational-codano-full-run-all-weights:v0', # foundational codano weights
-    #'ucl-neural-operator/data/foundational-fno-full-run:v0' # foundational fno weights
+    'ucl-neural-operator/data/foundational-fno-full-run:v0' # foundational fno weights
 
 ]
 

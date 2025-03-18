@@ -73,6 +73,7 @@ num_cols = 2
 num_rows = (num_metrics + num_cols - 1) // num_cols
 
 fig, axes = plt.subplots(num_rows, num_cols, figsize=(12, 4 * num_rows))
+fig.suptitle('Comparison of Low Rank Compression Performance', fontsize=16)
 axes = axes.flatten()
 
 markers = ['o', 's']

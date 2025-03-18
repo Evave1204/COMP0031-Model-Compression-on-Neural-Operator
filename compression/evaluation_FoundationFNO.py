@@ -3,6 +3,7 @@ import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
 from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
+from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.base import CompressedModel
 from compression.utils.fno_util import FNOYParams
 from neuralop.data.datasets.mixed import get_data_val_test_loader
@@ -56,20 +57,20 @@ validation_dataloaders, test_loaders, data_processor = get_data_val_test_loader(
 # )
 # pruned_model = pruned_model.to(device)
 
-lowrank_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model, 
-                                                   rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-                                                   min_rank=1,
-                                                   max_rank=128, # option = [8, 16, 32, 64, 128, 256]
-                                                   is_full_rank=False,
-                                                   is_compress_conv1d=False,
-                                                   is_compress_FC=False,
-                                                   is_compress_spectral=True),
-    create_replica=True
-)
+# lowrank_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: SVDLowRank(model, 
+#                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+#                                                    min_rank=1,
+#                                                    max_rank=128, # option = [8, 16, 32, 64, 128, 256]
+#                                                    is_full_rank=False,
+#                                                    is_compress_conv1d=False,
+#                                                    is_compress_FC=False,
+#                                                    is_compress_spectral=True),
+#     create_replica=True
+# )
 
-lowrank_model = lowrank_model.to(device)
+# lowrank_model = lowrank_model.to(device)
 
 # dynamic_quant_model = CompressedModel(
 #     model=fno_model,
@@ -88,7 +89,7 @@ lowrank_model = lowrank_model.to(device)
 
 dynamic_quant_model = CompressedModel(
     model=fno_model,
-    compression_technique=lambda model: DynamicQuantization(model),
+    compression_technique=lambda model: UniformQuantisation(model),
     create_replica=True
 )
 dynamic_quant_model = dynamic_quant_model.to(device)

@@ -9,7 +9,6 @@ from neuralop.data.datasets import load_darcy_flow_small
 
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.utils.fno_util import optional_fno
-from compression.utils.collate_graphs import clean_compare, plot_compare
 
 fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="low")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -65,14 +64,3 @@ quantised_compare = compare_models(
     device=device,
     track_performance=True
 )
-
-final_results = {}
-final_results.update(lowrank_compare)
-final_results.update(quantised_compare)
-final_compress_stats = {}
-final_compress_stats.update(lowrank_model.get_compression_stats())
-final_compress_stats.update(quantised_model.get_compression_stats())
-print(clean_compare(final_results))
-print(final_compress_stats)
-exit()
-plot_compare(clean_compare(final_results), lowrank_model.get_compression_stats())

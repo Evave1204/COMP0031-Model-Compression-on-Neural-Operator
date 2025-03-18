@@ -5,11 +5,11 @@ wandb.login()
 models_dir = "models/" 
 artifacts = [
     # Darcy 16 FNO
-    #"ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-04-18-48:v0",
+    "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-04-18-48:v0",
     # Darcy 32 FNO
-    #"ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-17-19-02:v0",
+    "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-17-19-02:v0",
     # Darcy 128 FNO
-    #"ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-17-18-57:v0",
+    "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-17-18-57:v0",
 
     # "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-02-12-18-47:v0",
 

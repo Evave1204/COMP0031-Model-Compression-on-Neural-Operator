@@ -47,7 +47,8 @@ validation_dataloaders, test_loaders, data_processor = get_data_val_test_loader(
                                                                   pack=params.pack_data)
 
 
-
+print("\n"*2)
+print("Compressing Model.....")
 # Initialize models 
 # pruned_model = CompressedModel(
 #     model=fno_model,
@@ -59,9 +60,9 @@ validation_dataloaders, test_loaders, data_processor = get_data_val_test_loader(
 lowrank_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: SVDLowRank(model, 
-                                                   rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+                                                   rank_ratio=0.97, # [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
                                                    min_rank=1,
-                                                   max_rank=128, # option = [8, 16, 32, 64, 128, 256]
+                                                   max_rank=256,
                                                    is_full_rank=False,
                                                    is_compress_conv1d=False,
                                                    is_compress_FC=False,
@@ -86,16 +87,17 @@ lowrank_model = lowrank_model.to(device)
 
 # lowrank_model = lowrank_model.to(device)
 
-dynamic_quant_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: DynamicQuantization(model),
-    create_replica=True
-)
-dynamic_quant_model = dynamic_quant_model.to(device)
+# dynamic_quant_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: DynamicQuantization(model),
+#     create_replica=True
+# )
+# dynamic_quant_model = dynamic_quant_model.to(device)
 
 
-# Start Compression ..
 
+print("\n"*2)
+print("Getting Result.....")
 # print("\n"*2)
 # print("Pruning.....")
 # compare_models(
@@ -106,23 +108,24 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 #     device=device
 # )
 
-# print("\n"*2)
-# print("Low Ranking.....")
-# compare_models(
-#     model1=fno_model,
-#     model2=lowrank_model,
-#     test_loaders=test_loaders,
-#     data_processor=data_processor,
-#     device=device,
-#     track_performance = True
-# )
 
-print("\n"*2)
-print("Dynamic Quantization.....")
-compare_models(
-    model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
-    model2=dynamic_quant_model,     # The dynamically quantized model
+results = compare_models(
+    model1=fno_model,
+    model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device=device
+    device=device,
+    track_performance = True
 )
+
+# print("\n"*2)
+# print("Dynamic Quantization.....")
+# compare_models(
+#     model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
+#     model2=dynamic_quant_model,     # The dynamically quantized model
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device
+# )
+
+print(results)

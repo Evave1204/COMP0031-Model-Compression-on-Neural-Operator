@@ -160,6 +160,20 @@ def evaluate_model(model,
                         for mk, mv in model_input.items():
                             if torch.is_tensor(mv):
                                 clone_dict[mk] = mv.clone()
+                            
+                        if 'x' in clone_dict and len(clone_dict['x'].shape) >= 2:
+                            is_codano = False
+                            
+                            if hasattr(model, 'model'):
+                                inner_model = model.model
+                                is_codano = (hasattr(inner_model, '__class__') and 
+                                             'codano' in str(inner_model.__class__.__name__).lower())
+                            elif 'codano' in str(model.__class__.__name__).lower():
+                                is_codano = True
+                                
+                            if is_codano and 'variable_ids' not in clone_dict:
+                                clone_dict['variable_ids'] = ["a1"]
+                                
                         return clone_dict
 
                     macs, params_model = get_model_complexity_info(

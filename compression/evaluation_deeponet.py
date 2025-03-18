@@ -1,3 +1,5 @@
+import sys
+sys.path.append("C:\\Users\\ahmed\\UCL-Ibsa-Ahmed\\Year_3\\COMP0030-31\\COMP0031-Model-Compression-on-Neural-Operator")
 from neuralop.models import DeepONet
 import torch
 from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
@@ -6,6 +8,7 @@ from compression.UniformQuant.uniform_quant import UniformQuantisation
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils import evaluate_model, compare_models
+import matplotlib.pyplot as plt
 
 deeponet_model = DeepONet(
     train_resolution=128,
@@ -35,7 +38,7 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_output=False,
 )
 
-pruned_model = CompressedModel(
+'''pruned_model = CompressedModel(
     model=deeponet_model,
     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
     create_replica=True
@@ -48,7 +51,7 @@ lowrank_model = CompressedModel(
                                                  min_rank=4, max_rank=128),
     create_replica=True
 )
-lowrank_model = lowrank_model.to(device)
+lowrank_model = lowrank_model.to(device)'''
 
 quantised_model = CompressedModel(
     model=deeponet_model,
@@ -56,7 +59,7 @@ quantised_model = CompressedModel(
     create_replica=True
 )
 
-print("Pruning.....")
+'''print("Pruning.....")
 compare_models(
     model1=deeponet_model,
     model2=pruned_model,
@@ -66,19 +69,40 @@ compare_models(
 )
 
 print("Low Ranking.....")
-compare_models(
+lowrank_compare = compare_models(
     model1=deeponet_model,
     model2=lowrank_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device
-)
+)'''
 
 print("Quantising.....")
-compare_models(
+quantised_compare = compare_models(
     model1=deeponet_model,
     model2=quantised_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device
 )
+
+print(quantised_compare)
+
+def plot_accuracy(*args):
+    models = ['Original', 'Quantised']
+    accuracies = [1-args[0]['128_base']['l2_loss']]
+    for each in args:
+        accuracies.append(1-each['128_compressed']['l2_loss'])
+
+    plt.figure(figsize=(10, 6))
+    #plt.bar(models, accuracies, color=['blue', 'orange'])
+    print(models, accuracies)
+    plt.plot(models, accuracies, color='blue')
+    plt.xlabel('Model Type')
+    plt.ylabel('Accuracy')
+    plt.title('Model Accuracies Comparison')
+    plt.ylim(0, 1)  # Assuming accuracy is between 0 and 1
+    plt.show()
+
+# Call the plot_accuracy function with the comparison results
+plot_accuracy(quantised_compare)

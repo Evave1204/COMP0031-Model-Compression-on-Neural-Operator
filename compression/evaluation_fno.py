@@ -41,28 +41,28 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
 )
 
 
-pruned_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.05),
-    create_replica=True
-)
-pruned_model = pruned_model.to(device)
+# pruned_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.05),
+#     create_replica=True
+# )
+# pruned_model = pruned_model.to(device)
 
-lowrank_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
-                                                   min_rank=8, max_rank=16),
-    create_replica=True
-)
-lowrank_model = lowrank_model.to(device)
+# lowrank_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
+#                                                    min_rank=8, max_rank=16),
+#     create_replica=True
+# )
+# lowrank_model = lowrank_model.to(device)
 
-compare_models(
-    model1=fno_model,
-    model2=lowrank_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device
-)
+# compare_models(
+#     model1=fno_model,
+#     model2=lowrank_model,
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device
+# )
 
 quantised_model = CompressedModel(
     model=fno_model,

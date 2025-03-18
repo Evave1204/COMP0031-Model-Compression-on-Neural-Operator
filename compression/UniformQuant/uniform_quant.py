@@ -18,7 +18,9 @@ class UniformQuantisation(CompressionTechnique):
         self._quantise_model()
     
     def get_compression_stats(self) -> Dict[str, float]:
-        return {"sparsity": self.get_size()/self.init_size}
+        return {"compression_ratio": self.get_size()/self.init_size,
+                "bits": self.num_bits,
+                }
 
     def _quantise_model(self) -> None:
         self.model.eval()

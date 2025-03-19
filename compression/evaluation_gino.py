@@ -11,6 +11,11 @@ from copy import deepcopy
 from neuralop.data.transforms.gino_processor import GINOCFDDataProcessor
 from compression.quantization.dynamic_quantization import DynamicQuantization
 
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 config_name = 'cfd'
 pipe = ConfigPipeline([YamlConfig('./gino_carcfd_config.yaml', config_name=config_name, config_folder='./config')])
 config = pipe.read_conf()

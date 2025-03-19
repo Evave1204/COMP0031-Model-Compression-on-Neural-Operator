@@ -8,6 +8,11 @@ from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.quantization.dynamic_quantization import DynamicQuantization
 
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 deeponet_model = DeepONet(
     train_resolution=128,
     in_channels=1,

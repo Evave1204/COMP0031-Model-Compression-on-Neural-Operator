@@ -18,8 +18,11 @@ from neuralop.data.transforms.codano_processor import CODANODataProcessor
 from compression.utils.codano_util import missing_variable_testing, CodanoYParams
 
 # we should use scatter to accerlaerate
-import warnings
-warnings.filterwarnings("ignore", message="use_scatter is True but torch_scatter is not properly built")
+
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 
 

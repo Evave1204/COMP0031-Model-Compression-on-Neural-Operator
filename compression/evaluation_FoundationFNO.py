@@ -14,6 +14,11 @@ import matplotlib.pyplot as plt
 import logging
 import torch.distributed as dist
 
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 parser = argparse.ArgumentParser()
 parser.add_argument("--yaml_config", default='config/mixed_config.yaml', type=str)
 parser.add_argument("--config", default='fno-foundational', type=str)

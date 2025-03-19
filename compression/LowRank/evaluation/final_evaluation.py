@@ -146,27 +146,28 @@ if __name__ == "__main__":
         hidden_variable_codimension=2,
         lifting_channels=4,
 
-        use_positional_encoding=False,
-        positional_encoding_dim=1,
+        use_positional_encoding=True,
+        positional_encoding_dim=2,
         positional_encoding_modes=[8, 8],
 
         use_horizontal_skip_connection=True,
         horizontal_skips_map={3: 1, 4: 0},
 
         n_layers=5,
-        n_heads=[2, 2, 2, 2, 2],
-        n_modes=[[8, 8], [8, 8], [8, 8], [8, 8], [8, 8]],
+        n_heads=[32, 32, 32, 32, 32],
+        n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
         attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
-        per_layer_scaling_factors=[[1, 1], [0.5, 0.5], [1, 1], [2, 2], [1, 1]],
+        per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
 
         static_channel_dim=0,
         variable_ids=["a1"],
         enable_cls_token=False
     )
 
+
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     cpu_device = torch.device('cpu')
-    codano_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt", weights_only=False))
+    codano_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
     codano_model.eval()
     codano_model = codano_model.to(device)
 
@@ -188,20 +189,20 @@ if __name__ == "__main__":
 
     # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
     deeponet_model = DeepONet(
-        train_resolution=128,
-        in_channels=1,
-        out_channels=1, 
-        hidden_channels=64,
-        branch_layers=[256, 256, 256, 256, 128],
-        trunk_layers=[256, 256, 256, 256, 128],
-        positional_embedding='grid',
-        non_linearity='gelu',
-        norm='instance_norm',
-        dropout=0.1
+    train_resolution=128,
+    in_channels=1,
+    out_channels=1, 
+    hidden_channels=64,
+    branch_layers=[256, 256, 256, 256, 128],
+    trunk_layers=[256, 256, 256, 256, 128],
+    positional_embedding='grid',
+    non_linearity='gelu',
+    norm='instance_norm',
+    dropout=0.1
     )
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-02-19-22-23.pt", weights_only=False))
+    deeponet_model.load_state_dict(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
     deeponet_model.eval()
     deeponet_model = deeponet_model.to(device)
 

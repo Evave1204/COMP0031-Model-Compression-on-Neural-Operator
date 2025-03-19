@@ -8,6 +8,11 @@ from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
+
 fno_model = CODANO(
     in_channels=1,
     output_variable_codimension=1,

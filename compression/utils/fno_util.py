@@ -74,7 +74,7 @@ def optional_fno(resolution):
             dropout=0.0)
         fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-17-18-57.pt", weights_only=False))
         fno_model.eval()    
-        train_loader, test_loaders, data_processor = load_darcy_flow_small_validation_test(
+        validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
             n_train=1000,
             batch_size=16,
             test_resolutions=[16],
@@ -83,7 +83,7 @@ def optional_fno(resolution):
             encode_input=True, 
             encode_output=False,
         )
-        return fno_model, train_loader, test_loaders, data_processor
+        return fno_model, validation_loaders, test_loaders, data_processor
     
     elif resolution == "medium":
         fno_model = FNO(
@@ -106,7 +106,7 @@ def optional_fno(resolution):
         fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-17-19-02.pt", weights_only=False))
         fno_model.eval()
 
-        train_loader, test_loaders, data_processor = load_darcy_flow_small_validation_test(
+        validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
             n_train=100,
             batch_size=16,
             test_resolutions=[32],
@@ -115,7 +115,7 @@ def optional_fno(resolution):
             encode_input=True, 
             encode_output=False,
         )
-        return fno_model, train_loader, test_loaders, data_processor
+        return fno_model, validation_loaders, test_loaders, data_processor
     
     elif resolution == "high":
         fno_model = FNO(
@@ -138,7 +138,7 @@ def optional_fno(resolution):
         fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt", weights_only=False))
         fno_model.eval()
 
-        train_loader, test_loaders, data_processor = load_darcy_flow_small_validation_test(
+        validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
             n_train=100,
             batch_size=16,
             test_resolutions=[128],
@@ -147,4 +147,4 @@ def optional_fno(resolution):
             encode_input=True, 
             encode_output=False,
         )
-        return fno_model, train_loader, test_loaders, data_processor
+        return fno_model, validation_loaders, test_loaders, data_processor

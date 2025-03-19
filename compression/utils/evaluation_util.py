@@ -13,6 +13,7 @@ from neuralop.data_utils.data_utils import batched_masker
 from neuralop.utils import prepare_input
 from compression.utils.codano_util import get_grid_displacement
 
+
 def evaluate_model(model, 
                    dataloader, 
                    data_processor=None, 
@@ -317,34 +318,44 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
                 if 'flops' in results[f'{resolution}_compressed']:
                     print(f"FLOPs: {results[f'{resolution}_compressed']['flops']/1e9:.2f} GFLOPs")
     
-    if verbose:
-        print("\n" + "="*50)
-        print("PERFORMANCE COMPARISON")
-        print("="*50)
-        print("\nRelative increase in error (compressed vs original):")
-        print("-"*50)
-    
+        if verbose:
+            print("\n" + "="*50)
+            print("PERFORMANCE COMPARISON")
+            print("="*50)
+            print("\nRelative increase in error (compressed vs original):")
+            print("-"*50)
+        results["Comparison"] = {}
         for resolution in test_loaders.keys():
             base_results = results[f"{resolution}_base"]
             comp_results = results[f"{resolution}_compressed"]
-            print(f"{resolution}x{resolution} - L2: {(comp_results['l2_loss']/base_results['l2_loss'] - 1)*100:.2f}%")
+            l2_change_percentage = (comp_results['l2_loss'] / base_results['l2_loss'] - 1) * 100
+            results["Comparison"]["l2_loss_increase"] = l2_change_percentage
+            print(f"{resolution}x{resolution} - L2: {l2_change_percentage:.2f}%")
             
             # Performance comparison if tracking enabled
             if track_performance:
                 if 'runtime' in base_results and 'runtime' in comp_results:
-                    speedup = base_results['runtime'] / comp_results['runtime']
+                    if comp_results['runtime'] == 0:
+                        speedup = 0
+                    else:
+                        speedup = (base_results['runtime'] / comp_results['runtime']) * 100
+                    results["Comparison"]["run_time_speed_up"] = speedup
                     print(f"{resolution}x{resolution} - Runtime Speedup: {speedup:.2f}x")
                 
                 if 'model_size_mb' in base_results and 'model_size_mb' in comp_results:
                     model_size_reduction = (1 - comp_results['model_size_mb'] / base_results['model_size_mb']) * 100
+                    results["Comparison"]["model_size_reduction"] = model_size_reduction
                     print(f"{resolution}x{resolution} - Model Size Reduction: {model_size_reduction:.2f}%")
                 
                 if 'peak_memory_mb' in base_results and 'peak_memory_mb' in comp_results:
                     memory_reduction = (1 - comp_results['peak_memory_mb'] / base_results['peak_memory_mb']) * 100
+                    results["Comparison"]["peak_memory_reduction"] = memory_reduction
                     print(f"{resolution}x{resolution} - Peak Memory Reduction: {memory_reduction:.2f}%")
                 
                 if 'flops' in base_results and 'flops' in comp_results:
                     flops_reduction = (1 - comp_results['flops'] / base_results['flops']) * 100
+                    results["Comparison"]["flops_reduction"] = flops_reduction
                     print(f"{resolution}x{resolution} - FLOPs Reduction: {flops_reduction:.2f}%")
+            
     
     return results

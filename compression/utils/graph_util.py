@@ -3,17 +3,17 @@ import numpy as np
 import matplotlib.gridspec as gridspec
 
 def generate_graph(results: dict, hyperparameters: dict, model_name: str, measureable: str, unit: str, savefile: str = None):
-    metrics = ["l2_loss_increase", "run_time_speed_up", 
-               "model_size_reduction", "peak_memory_reduction", "flops_reduction"]  
+    metrics = ["l2_loss_increase", "model_size_reduction", 
+               "run_time_speed_up", "peak_memory_reduction", "flops_reduction"]  
     fig = plt.figure(figsize=(15, 10)) 
     fig.suptitle(f'Comparison of {model_name.replace("_"," ").title()} Compression Performance', fontsize=16)
 
     gs = gridspec.GridSpec(2, 3, height_ratios=[1, 1], width_ratios=[1, 1, 1])  
 
-    markers = ['o', 's', 'D', '^', 'v']
-    colors = ['#2ecc71', '#e74c3c', '#3498db', '#9b59b6', '#f1c40f']
+    markers = ['o', 's', 'D', '^', 'v', 'p', '*']
+    colors = ['#2ecc71', '#e74c3c', '#3498db', '#9b59b6', '#f1c40f', '#ff5733', '#1abc9c'] 
 
-    plot_positions = [(0, 0), (0, 1), (0, 2), (1, 0), (1, 1)]  
+    plot_positions = [(0, 0), (0, 1), (1, 0), (1, 1), (1,2)]  
     axes = []  
 
     global_handles = [] 

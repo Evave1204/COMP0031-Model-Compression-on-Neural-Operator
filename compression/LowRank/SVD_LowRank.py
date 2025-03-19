@@ -37,7 +37,7 @@ class SVDLowRank:
                  min_rank=1, 
                  max_rank=256,
                  is_full_rank = False,
-                 is_compress_conv1d=True, 
+                 is_compress_conv1d=False, 
                  is_compress_spectral=True,
                  is_compress_FC=True):
         

@@ -38,157 +38,144 @@ if __name__ == "__main__":
     torch.backends.cudnn.benchmark = False
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-    # # ------------------------------------- INIT FOUNDATION FNO MODEL ---------------------------------------
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--yaml_config", default='config/mixed_config.yaml', type=str)
-    # parser.add_argument("--config", default='fno-foundational', type=str)
-    # parser.add_argument("--root_dir", default='./', type=str, help='root dir to store results')
-    # parser.add_argument("--run_num", default='0', type=str, help='sub run config')
-    # parser.add_argument("--sweep_id", default=None, type=str, help='sweep config from ./configs/sweeps.yaml')
-    # args = parser.parse_args()
-    # params = FNOYParams(os.path.abspath(args.yaml_config), args.config, print_params=False)
-    # if dist.is_initialized():
-    #     dist.barrier()
-    # logging.info('DONE')
-    # params['global_batch_size'] = params.batch_size
-    # params['local_batch_size'] = int(params.batch_size)
+    # ------------------------------------- INIT FOUNDATION FNO MODEL ---------------------------------------
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--yaml_config", default='config/mixed_config.yaml', type=str)
+    parser.add_argument("--config", default='fno-foundational', type=str)
+    parser.add_argument("--root_dir", default='./', type=str, help='root dir to store results')
+    parser.add_argument("--run_num", default='0', type=str, help='sub run config')
+    parser.add_argument("--sweep_id", default=None, type=str, help='sweep config from ./configs/sweeps.yaml')
+    args = parser.parse_args()
+    params = FNOYParams(os.path.abspath(args.yaml_config), args.config, print_params=False)
+    if dist.is_initialized():
+        dist.barrier()
+    logging.info('DONE')
+    params['global_batch_size'] = params.batch_size
+    params['local_batch_size'] = int(params.batch_size)
 
-    # params['global_valid_batch_size'] = params.valid_batch_size
-    # params['local_valid_batch_size'] = int(params.valid_batch_size)
-    # ffno_model = fno(params).to(device)
-    # checkpoints = torch.load("models/ckpt_best.tar", map_location='cpu', weights_only=False)  
-    # ffno_model.load_state_dict(checkpoints['model_state'])
-    # ffno_model.eval()
+    params['global_valid_batch_size'] = params.valid_batch_size
+    params['local_valid_batch_size'] = int(params.valid_batch_size)
+    ffno_model = fno(params).to(device)
+    checkpoints = torch.load("models/ckpt_best.tar", map_location='cpu', weights_only=False)  
+    ffno_model.load_state_dict(checkpoints['model_state'])
+    ffno_model.eval()
 
-    # validation_loaders_ffno, test_loaders_ffno, data_processor_ffno = get_data_val_test_loader(params,
-    #                                                                 params.test_path, 
-    #                                                                 dist.is_initialized(), 
-    #                                                                 train=False, 
-    #                                                                 pack=params.pack_data)
+    validation_loaders_ffno, test_loaders_ffno, data_processor_ffno = get_data_val_test_loader(params,
+                                                                    params.test_path, 
+                                                                    dist.is_initialized(), 
+                                                                    train=False, 
+                                                                    pack=params.pack_data)
 
-    # # ------------------------------------- INIT FOUNDATION CODANO MODEL ---------------------------------------
-    # parser = argparse.ArgumentParser()
-    # parser.add_argument("--exp", nargs="?", default="FSI", type=str)
-    # parser.add_argument("--config", nargs="?", default="codano_gno_NS_ES", type=str)
-    # args = parser.parse_args()
-    # config_file = './config/ssl_ns_elastic.yaml'
-    # print("Loading config", args.config)
-    # params = CodanoYParams(config_file, args.config, print_params=True)
-    # torch.manual_seed(params.random_seed)
-    # random.seed(params.random_seed)
-    # np.random.seed(params.random_seed)
-    # params.config = args.config
-    # stage = StageEnum.PREDICTIVE
-    # variable_encoder = None
-    # token_expander = None
+    # ------------------------------------- INIT FOUNDATION CODANO MODEL ---------------------------------------
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--exp", nargs="?", default="FSI", type=str)
+    parser.add_argument("--config", nargs="?", default="codano_gno_NS_ES", type=str)
+    args = parser.parse_args()
+    config_file = './config/ssl_ns_elastic.yaml'
+    print("Loading config", args.config)
+    params = CodanoYParams(config_file, args.config, print_params=True)
+    torch.manual_seed(params.random_seed)
+    random.seed(params.random_seed)
+    np.random.seed(params.random_seed)
+    params.config = args.config
+    stage = StageEnum.PREDICTIVE
+    variable_encoder = None
+    token_expander = None
 
-    # encoder, decoder, contrastive, predictor = get_ssl_models_codano_gino(params)
-    # if params.use_variable_encoding:
-    #     variable_encoder = get_variable_encoder(params)
-    #     token_expander = TokenExpansion(
-    #         sum([params.equation_dict[i] for i in params.equation_dict.keys()]),
-    #         params.n_encoding_channels, params.n_static_channels,
-    #         params.grid_type == 'uniform'
-    #     )
+    encoder, decoder, contrastive, predictor = get_ssl_models_codano_gino(params)
+    if params.use_variable_encoding:
+        variable_encoder = get_variable_encoder(params)
+        token_expander = TokenExpansion(
+            sum([params.equation_dict[i] for i in params.equation_dict.keys()]),
+            params.n_encoding_channels, params.n_static_channels,
+            params.grid_type == 'uniform'
+        )
 
-    # fcodano_model = SSLWrapper(params, encoder, decoder, contrastive, predictor, stage=stage)
+    fcodano_model = SSLWrapper(params, encoder, decoder, contrastive, predictor, stage=stage)
 
-    # print("Setting the Grid")
-    # mesh = get_mesh(params)
-    # input_mesh = torch.from_numpy(mesh).type(torch.float).cuda()
-    # fcodano_model.set_initial_mesh(input_mesh)
+    print("Setting the Grid")
+    mesh = get_mesh(params)
+    input_mesh = torch.from_numpy(mesh).type(torch.float).cuda()
+    fcodano_model.set_initial_mesh(input_mesh)
 
-    # stage = StageEnum.PREDICTIVE
-    # fcodano_model.load_state_dict(torch.load(params.model_path), strict=False)
-    # fcodano_model = fcodano_model.cuda().eval()
+    stage = StageEnum.PREDICTIVE
+    fcodano_model.load_state_dict(torch.load(params.model_path), strict=False)
+    fcodano_model = fcodano_model.cuda().eval()
 
-    # variable_encoder.load_encoder(
-    #                 "NS", params.NS_variable_encoder_path)
+    variable_encoder.load_encoder(
+                    "NS", params.NS_variable_encoder_path)
 
-    # variable_encoder.load_encoder(
-    #             "ES", params.ES_variable_encoder_path)
+    variable_encoder.load_encoder(
+                "ES", params.ES_variable_encoder_path)
 
-    # if variable_encoder is not None:
-    #     variable_encoder = variable_encoder.cuda().eval()
-    # if token_expander is not None:
-    #     token_expander = token_expander.cuda().eval()
+    if variable_encoder is not None:
+        variable_encoder = variable_encoder.cuda().eval()
+    if token_expander is not None:
+        token_expander = token_expander.cuda().eval()
 
-    # dataset_fcodano = NsElasticDataset(
-    #     params.data_location,
-    #     equation=list(params.equation_dict.keys()),
-    #     mesh_location=params.input_mesh_location,
-    #     params=params
-    # )
+    dataset_fcodano = NsElasticDataset(
+        params.data_location,
+        equation=list(params.equation_dict.keys()),
+        mesh_location=params.input_mesh_location,
+        params=params
+    )
 
-    # validation_loaders_fcodano, test_loaders_fcodano = dataset_fcodano.get_validation_test_dataloader(
-    #     params.mu_list, params.dt,
-    #     ntrain=params.get('ntrain'),
-    #     ntest=40,
-    #     batch_size = 1,
-    #     #val_ratio=0.01,
-    #     sample_per_inlet=params.sample_per_inlet
-    # )
+    validation_loaders_fcodano, test_loaders_fcodano = dataset_fcodano.get_validation_test_dataloader(
+        params.mu_list, params.dt,
+        ntrain=params.get('ntrain'),
+        ntest=40,
+        batch_size = 1,
+        #val_ratio=0.01,
+        sample_per_inlet=params.sample_per_inlet
+    )
 
-    # grid_non, grid_uni = get_meshes(params, params.grid_size)
-    # test_augmenter = None
+    grid_non, grid_uni = get_meshes(params, params.grid_size)
+    test_augmenter = None
 
-    # fcodano_evaluation_params = {"variable_encoder": variable_encoder,
-    #                             "token_expander": token_expander,
-    #                             "params": params,
-    #                             "stage": stage,
-    #                             "input_mesh":input_mesh}
+    fcodano_evaluation_params = {"variable_encoder": variable_encoder,
+                                "token_expander": token_expander,
+                                "params": params,
+                                "stage": stage,
+                                "input_mesh":input_mesh}
 
-    # # ------------------------------------- INIT CODANO MODEL ---------------------------------------
-    # codano_model = CODANO(
-    #     in_channels=1,
-    #     output_variable_codimension=1,
+    # ------------------------------------- INIT CODANO MODEL ---------------------------------------
+    codano_model = CODANO(
+        in_channels=1,
+        output_variable_codimension=1,
 
-    #     hidden_variable_codimension=2,
-    #     lifting_channels=4,
+        hidden_variable_codimension=2,
+        lifting_channels=4,
 
-    #     use_positional_encoding=True,
-    #     positional_encoding_dim=2,
-    #     positional_encoding_modes=[8, 8],
-        # use_positional_encoding=True,
-        # positional_encoding_dim=2,
-        # positional_encoding_modes=[8, 8],
+        use_positional_encoding=True,
+        positional_encoding_dim=2,
+        positional_encoding_modes=[8, 8],
+        use_positional_encoding=True,
+        positional_encoding_dim=2,
+        positional_encoding_modes=[8, 8],
 
-    #     use_horizontal_skip_connection=True,
-    #     horizontal_skips_map={3: 1, 4: 0},
+        use_horizontal_skip_connection=True,
+        horizontal_skips_map={3: 1, 4: 0},
 
-    #     n_layers=5,
-    #     n_heads=[32, 32, 32, 32, 32],
-    #     n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
-    #     attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
-    #     per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
-        # n_layers=5,
-        # n_heads=[32, 32, 32, 32, 32],
-        # n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
-        # attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
-        # per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
+        n_layers=5,
+        n_heads=[32, 32, 32, 32, 32],
+        n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
+        attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
+        per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
+        n_layers=5,
+        n_heads=[32, 32, 32, 32, 32],
+        n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
+        attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
+        per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
 
-    #     static_channel_dim=0,
-    #     variable_ids=["a1"],
-    #     enable_cls_token=False
-    # )
-
-    #     static_channel_dim=0,
-    #     variable_ids=["a1"],
-    #     enable_cls_token=False
-    # )
+        static_channel_dim=0,
+        variable_ids=["a1"],
+        enable_cls_token=False
+    )
 
 
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # cpu_device = torch.device('cpu')
-    # codano_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
-    # codano_model.eval()
-    # codano_model = codano_model.to(device)
-
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # cpu_device = torch.device('cpu')
-    # codano_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
-    # codano_model.eval()
-    # codano_model = codano_model.to(device)
+    codano_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
+    codano_model.eval()
+    codano_model = codano_model.to(device)
 
     validation_loaders_codano, test_loaders_codano, data_processor_codano = load_darcy_flow_small_validation_test(
         n_train=10,
@@ -206,6 +193,7 @@ if __name__ == "__main__":
         out_normalizer=data_processor_codano.out_normalizer
     )
 
+
     # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
     deeponet_model = DeepONet(
     train_resolution=128,
@@ -219,43 +207,21 @@ if __name__ == "__main__":
     norm='instance_norm',
     dropout=0.1
     )
-    # # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
-    # deeponet_model = DeepONet(
-    # train_resolution=128,
-    # in_channels=1,
-    # out_channels=1, 
-    # hidden_channels=64,
-    # branch_layers=[256, 256, 256, 256, 128],
-    # trunk_layers=[256, 256, 256, 256, 128],
-    # positional_embedding='grid',
-    # non_linearity='gelu',
-    # norm='instance_norm',
-    # dropout=0.1
-    # )
 
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     deeponet_model.load_state_dict(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
     deeponet_model.eval()
     deeponet_model = deeponet_model.to(device)
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # deeponet_model.load_state_dict(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
-    # deeponet_model.eval()
-    # deeponet_model = deeponet_model.to(device)
 
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # deeponet_model.load_state_dict(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
-    # deeponet_model.eval()
-    # deeponet_model = deeponet_model.to(device)
+    validation_loaders_deeponet, test_loaders_deeponet, data_processor_deeponet = load_darcy_flow_small_validation_test(
+        n_train=10,
+        batch_size=4,
+        test_resolutions=[128],
+        n_tests=[10],
+        test_batch_sizes=[4, 4],
+        encode_input=False, 
+        encode_output=False,
+    )
 
-    # validation_loaders_deeponet, test_loaders_deeponet, data_processor_deeponet = load_darcy_flow_small_validation_test(
-    #     n_train=10,
-    #     batch_size=4,
-    #     test_resolutions=[128],
-    #     n_tests=[10],
-    #     test_batch_sizes=[4, 4],
-    #     encode_input=False, 
-    #     encode_output=False,
-    # )
     # ------------------------------------- INIT FNO 16x16 MODEL ---------------------------------------
     fno_model_16, validation_loaders_fno16, test_loaders_fno16, data_processor_fno16 = optional_fno(resolution="low")
     fno_model_16 = fno_model_16.to(device)
@@ -274,7 +240,7 @@ if __name__ == "__main__":
     hyperparameters = {
         "FNO 16x16": [0.5, 0.55, 0.6, 0.65, 0.7], # small
         "FNO 32x32": [0.5, 0.55, 0.6, 0.65, 0.7],
-        "Codano": [0.5, 0.55, 0.6, 0.65, 0.7],
+        "Codano":  [0.5, 0.55, 0.6, 0.65, 0.7],
         "FNO 128x128": [0.7, 0.75, 0.8, 0.85, 0.9], # medium
         "DeepONet": [0.7, 0.75, 0.8, 0.85, 0.9],
         "Foundation FNO": [0.7, 0.75, 0.8, 0.85, 0.9],

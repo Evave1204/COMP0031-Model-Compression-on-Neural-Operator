@@ -30,7 +30,7 @@ def generate_graph(results: dict, hyperparameters: dict, model_name: str, measur
             
             x_values = hyperparameters[model] 
             y_values = [
-                results[model].get(ratio, {}).get("Comparison", {}).get(metric, None) 
+                results[model].get("Comparison", {}).get(ratio, {}).get(metric, None) 
                 for ratio in x_values
             ]
 

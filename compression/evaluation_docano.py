@@ -20,8 +20,8 @@ fno_model = CODANO(
     hidden_variable_codimension=2,
     lifting_channels=4,
 
-    use_positional_encoding=False,
-    positional_encoding_dim=1,
+    use_positional_encoding=True,
+    positional_encoding_dim=2,
     positional_encoding_modes=[8, 8],
 
     use_horizontal_skip_connection=True,
@@ -42,7 +42,7 @@ fno_model = CODANO(
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 cpu_device = torch.device('cpu')
-fno_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt", weights_only=False))
+fno_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
 fno_model.eval()
 fno_model = fno_model.to(device)
 
@@ -52,15 +52,12 @@ fno_model = fno_model.to(device)
 validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
     n_train=1000,
     batch_size=16,
-    test_resolutions=[16, 32],
-    n_tests=[100, 50],
-    test_batch_sizes=[16, 16],
+    test_resolutions=[128],
+    n_tests=[1000],
+    test_batch_sizes=[16],
     encode_input=False, 
     encode_output=False,
 )
-
-test_loader_16 = test_loaders[16]
-test_loader_32 = test_loaders[32]
 
 # When creating data processor, use the imported class
 data_processor = CODANODataProcessor(

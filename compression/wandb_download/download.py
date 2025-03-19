@@ -13,7 +13,8 @@ artifacts = [
     # Darcy 128
     "ucl-neural-operator/training/model-fno-darcy-16-resolution-2025-03-04-18-48:v0",
     "ucl-neural-operator/training/model-deeponet-darcy-128-resolution-2025-03-04-18-53:v0",
-    "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-03-04-20-01:v0",
+    # "ucl-neural-operator/training/model-gino-carcfd-32-resolution-2025-03-04-20-01:v0",
+    "ucl-neural-operator/training/model-codano-darcy-16-resolution-2025-03-15-19-31:v0"
 ]
 
 run = wandb.init()

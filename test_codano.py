@@ -31,7 +31,7 @@ def main():
         attention_scaling_factors=attention_scaling_factors,
         n_layers=n_layers
     )
-    weight_path = "models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt"
+    weight_path = "models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt"
     state_dict = torch.load(weight_path, map_location="cpu")
     model.load_state_dict(state_dict)
     print("CODANO loaded successfully!")

@@ -149,6 +149,9 @@ if __name__ == "__main__":
     #     use_positional_encoding=True,
     #     positional_encoding_dim=2,
     #     positional_encoding_modes=[8, 8],
+        # use_positional_encoding=True,
+        # positional_encoding_dim=2,
+        # positional_encoding_modes=[8, 8],
 
     #     use_horizontal_skip_connection=True,
     #     horizontal_skips_map={3: 1, 4: 0},
@@ -158,6 +161,16 @@ if __name__ == "__main__":
     #     n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
     #     attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
     #     per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
+        # n_layers=5,
+        # n_heads=[32, 32, 32, 32, 32],
+        # n_modes= [[128, 128], [128, 128], [128, 128], [128, 128], [128, 128]],
+        # attention_scaling_factors=[0.5, 0.5, 0.5, 0.5, 0.5],
+        # per_layer_scaling_factors=[[1, 1], [1, 1], [1, 1], [1, 1], [1, 1]],
+
+    #     static_channel_dim=0,
+    #     variable_ids=["a1"],
+    #     enable_cls_token=False
+    # )
 
     #     static_channel_dim=0,
     #     variable_ids=["a1"],
@@ -171,22 +184,41 @@ if __name__ == "__main__":
     # codano_model.eval()
     # codano_model = codano_model.to(device)
 
-    # validation_loaders_codano, test_loaders_codano, data_processor_codano = load_darcy_flow_small_validation_test(
-    #     n_train=10,
-    #     batch_size=16,
-    #     test_resolutions=[16],
-    #     n_tests=[10, 5],
-    #     test_batch_sizes=[16, 16],
-    #     encode_input=False, 
-    #     encode_output=False,
-    # )
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # cpu_device = torch.device('cpu')
+    # codano_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
+    # codano_model.eval()
+    # codano_model = codano_model.to(device)
 
-    # # When creating data processor, use the imported class
-    # data_processor_codano = CODANODataProcessor(
-    #     in_normalizer=data_processor_codano.in_normalizer,
-    #     out_normalizer=data_processor_codano.out_normalizer
-    # )
+    validation_loaders_codano, test_loaders_codano, data_processor_codano = load_darcy_flow_small_validation_test(
+        n_train=10,
+        batch_size=16,
+        test_resolutions=[16],
+        n_tests=[10, 5],
+        test_batch_sizes=[16, 16],
+        encode_input=False, 
+        encode_output=False,
+    )
 
+    # When creating data processor, use the imported class
+    data_processor_codano = CODANODataProcessor(
+        in_normalizer=data_processor_codano.in_normalizer,
+        out_normalizer=data_processor_codano.out_normalizer
+    )
+
+    # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
+    deeponet_model = DeepONet(
+    train_resolution=128,
+    in_channels=1,
+    out_channels=1, 
+    hidden_channels=64,
+    branch_layers=[256, 256, 256, 256, 128],
+    trunk_layers=[256, 256, 256, 256, 128],
+    positional_embedding='grid',
+    non_linearity='gelu',
+    norm='instance_norm',
+    dropout=0.1
+    )
     # # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
     # deeponet_model = DeepONet(
     # train_resolution=128,
@@ -200,6 +232,15 @@ if __name__ == "__main__":
     # norm='instance_norm',
     # dropout=0.1
     # )
+
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    deeponet_model.load_state_dict(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
+    deeponet_model.eval()
+    deeponet_model = deeponet_model.to(device)
+    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    # deeponet_model.load_state_dict(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))
+    # deeponet_model.eval()
+    # deeponet_model = deeponet_model.to(device)
 
     # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     # deeponet_model.load_state_dict(torch.load("models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt", weights_only=False))

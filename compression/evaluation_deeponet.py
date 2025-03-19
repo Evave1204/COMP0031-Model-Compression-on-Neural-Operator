@@ -27,7 +27,7 @@ deeponet_model = DeepONet(
 )
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-02-19-22-23.pt", weights_only=False))
+deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt", weights_only=False))
 deeponet_model.eval()
 deeponet_model = deeponet_model.to(device)
 
@@ -35,8 +35,8 @@ validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validat
     n_train=1000,
     batch_size=16,
     test_resolutions=[128],
-    n_tests=[100],
-    test_batch_sizes=[16, 16],
+    n_tests=[1000],
+    test_batch_sizes=[16],
     encode_input=False, 
     encode_output=False,
 )

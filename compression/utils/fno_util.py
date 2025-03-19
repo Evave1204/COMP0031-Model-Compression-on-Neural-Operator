@@ -143,7 +143,7 @@ def optional_fno(resolution):
             batch_size=16,
             test_resolutions=[128],
             n_tests=[10000],
-            test_batch_sizes=[1],
+            test_batch_sizes=[16],
             encode_input=True, 
             encode_output=False,
         )

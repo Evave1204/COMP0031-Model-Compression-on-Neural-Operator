@@ -385,22 +385,6 @@ class QuantizedSpectralConv(BaseSpectralConv):
         # copy the existing weight (converting to the desired dtype if needed)
         # Instead of reinitializing weights, copy them from the original layer:
 
-        self.weight = spectral_layer.weight
-
-        # Similarly, copy the bias if it exists:
-        self.bias = spectral_layer.bias
-
-        
-        self._contract = get_contract_fun(
-            self.weight, implementation=implementation, separable=separable
-        )
-
-        if bias:
-            self.bias = nn.Parameter(
-                init_std * torch.randn(*(tuple([self.out_channels]) + (1,) * self.order))
-            )
-        else:
-            self.bias = None
 
     def transform(self, x, output_shape=None):
         in_shape = list(x.shape[2:])
@@ -522,8 +506,19 @@ class QuantizedSpectralConv(BaseSpectralConv):
             # The last mode already has redundant half removed in real FFT
             slices_w += [slice(start//2, -start//2) if start else slice(start, None) for start in starts[:-1]]
             slices_w += [slice(None, -starts[-1]) if starts[-1] else slice(None)]
+
+        # Dequantize the weight from the stored quantized buffers.
+        if self.q_real is not None and self.q_imag is not None:
+            W_real = self._dequantize_int8(self.q_real, self.scale_real, self.min_real.item())
+            W_imag = self._dequantize_int8(self.q_imag, self.scale_imag, self.min_imag.item())
+            W_float = torch.complex(W_real, W_imag)
+        elif self.q_weight is not None:
+            W_float = self._dequantize_int8(self.q_weight, self.w_scale, self.w_min.item())
+        else:
+            raise RuntimeError("No quantized weight available.")
+
         
-        weight = self.weight[slices_w]
+        weight = W_float[slices_w]
 
         ### Pick the first n_modes modes of FFT signal along each dim
 
@@ -569,7 +564,10 @@ class QuantizedSpectralConv(BaseSpectralConv):
         else:
             x = torch.fft.irfftn(out_fft, s=mode_sizes, dim=fft_dims, norm=self.fft_norm)
 
-        if self.bias is not None:
-            x = x + self.bias
+        if self.q_bias is not None:
+            b_float = self._dequantize_int8(self.q_bias, self.bias_scale, self.b_min.item())
+            # Use view to reshape bias to match x dimensions
+            x = x + b_float.view(1, -1, *(1 for _ in mode_sizes))
+
 
         return x

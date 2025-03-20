@@ -65,7 +65,7 @@ print("Compressing Model.....")
 lowrank_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: SVDLowRank(model, 
-                                                   rank_ratio=0.97, # [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
+                                                   rank_ratio=0.9, # [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
                                                    min_rank=1,
                                                    max_rank=256,
                                                    is_full_rank=False,
@@ -117,7 +117,7 @@ print("Getting Result.....")
 results = compare_models(
     model1=fno_model,
     model2=lowrank_model,
-    test_loaders=test_loaders,
+    test_loaders=validation_dataloaders,
     data_processor=data_processor,
     device=device,
     track_performance = True

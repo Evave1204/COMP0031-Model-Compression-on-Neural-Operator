@@ -138,10 +138,9 @@ if __name__ == "__main__":
 
     # ------------------------------------- INIT INFO ---------------------------------------
     hyperparameters = {
-        "Foundation FNO": [0.7, 0.75, 0.8, 0.85, 0.9],
-        "Foundation Codano": [0.8, 0.85, 0.9, 0.95, 0.99] # large
+        "Foundation FNO": [0.85, 0.9, 0.95, 0.97, 0.99],
+        "Foundation Codano": [0.85, 0.9, 0.95, 0.97, 0.99] # large
     }
-    number_of_hyperparameters = 5
     results_by_model = {'Foundation FNO': {}, 'Foundation Codano': {}}
 
 # ================================= RUN COMPARISON =======================================
@@ -153,7 +152,7 @@ if __name__ == "__main__":
     for ratio in ffno_hyperparams:
         ffnolowrank_model = CompressedModel(
             model=ffno_model,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
+            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio, is_compress_FC=False),
             create_replica=True
         )
 
@@ -162,7 +161,7 @@ if __name__ == "__main__":
 
     ffnocompare = compare_models_hyperparams(
         model1=ffno_model,
-        model2s=ffnolowrank_model,
+        model2s=foundation_fnos,
         hyperparameters = ffno_hyperparams,
         test_loaders=validation_loaders_ffno,
         data_processor=None,

@@ -32,11 +32,11 @@ deeponet_model.eval()
 deeponet_model = deeponet_model.to(device)
 
 validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
-    n_train=1000,
+    n_train=10000,
     batch_size=16,
     test_resolutions=[128],
     n_tests=[1000],
-    test_batch_sizes=[16],
+    test_batch_sizes=[4, 4],
     encode_input=False, 
     encode_output=False,
 )

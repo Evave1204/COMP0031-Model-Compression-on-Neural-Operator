@@ -8,7 +8,7 @@ from neuralop.data.datasets import load_darcy_flow_small
 
 from compression.utils.evaluation_util import evaluate_model, compare_models, compare_models_hyperparams
 from compression.utils.fno_util import optional_fno
-import pandas as pd
+#import pandas as pd
 
 
 torch.manual_seed(42)
@@ -29,13 +29,20 @@ fno_model = fno_model.to(device)
 # )
 # pruned_model = pruned_model.to(device)
 
-hyperparameters = [0.5, 0.6]
+hyperparameters = [0.54,0.55,0.56,0.6]
 models = []
-for hyperparameter in hyperparameters:
+for ratio in hyperparameters:   
     lowrank_model = CompressedModel(
         model=fno_model,
-        compression_technique=lambda model: SVDLowRank(model, rank_ratio=hyperparameter, 
-    ))
+        compression_technique=lambda model: SVDLowRank(model, 
+                                                    rank_ratio=ratio, # option =  [0.5, 0.55, 0.6, 0.65, 0.68]// [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
+                                                    min_rank=1,
+                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                    is_compress_conv1d=False,
+                                                    is_compress_FC=False,
+                                                    is_compress_spectral=True),
+        create_replica=True
+    )
     lowrank_model = lowrank_model.to(device)
     models.append(lowrank_model)
 
@@ -93,5 +100,3 @@ results = compare_models_hyperparams(
 #     data_processor=data_processor,
 #     device=device
 # )
-
-

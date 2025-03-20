@@ -129,11 +129,11 @@ if __name__ == "__main__":
 
     # ------------------------------------- INIT INFO ---------------------------------------
     hyperparameters = {
-        "FNO 16x16": [0.55, 0.56, 0.57, 0.58, 0.6], # small
-        "FNO 32x32": [0.4,0.45,0.47, 0.5, 0.55],
-        "Codano":  [0.5, 0.55, 0.6, 0.65, 0.7],
-        "FNO 128x128": [0.45, 0.5, 0.51, 0.52, 0.53],
-        "DeepONet": [0.95, 0.96, 0.97, 0.98, 0.99],
+        "FNO 16x16": [0.56, 0.57], # small
+        "FNO 32x32": [0.4, 0.5],
+        "Codano":  [0.6, 0.65],
+        "FNO 128x128": [0.51, 0.52],
+        "DeepONet": [0.97, 0.98],
     }
     results_by_model = {'FNO 16x16': {}, 'FNO 32x32': {}, 'FNO 128x128': {}, 'Codano': {}, 'DeepONet': {}}
 
@@ -158,7 +158,7 @@ if __name__ == "__main__":
         model1=codano_model,
         model2s=codanos,
         hyperparameters=codano_hyperparams,
-        test_loaders=validation_loaders_codano,
+        test_loaders=test_loaders_codano,
         data_processor=data_processor_codano,
         device=device,
         track_performance=True
@@ -182,7 +182,7 @@ if __name__ == "__main__":
         model1=deeponet_model,
         model2s=deeponets,
         hyperparameters=deeponet_hyperparams,
-        test_loaders=validation_loaders_deeponet,
+        test_loaders=test_loaders_deeponet,
         data_processor=data_processor_deeponet,
         device=device,
         track_performance = True
@@ -206,12 +206,12 @@ if __name__ == "__main__":
         model1=fno_model_16,
         model2s=fno_16s,
         hyperparameters=fno16_hyperparams,
-        test_loaders=validation_loaders_fno16,
+        test_loaders=test_loaders_fno16,
         data_processor=data_processor_fno16,
         device=device,
         track_performance=True
     )
-    results_by_model["FNO 16x16"].update(fnocompare_16)
+    results_by_model["FNO 16x16"] = fnocompare_16
 
     # ------------------------------------- FNO 32 ---------------------------------------
     print("<"+"="*50, "Processing FNO 32x32", 50*"="+">")
@@ -230,7 +230,7 @@ if __name__ == "__main__":
         model1=fno_model_32,
         model2s=fno_32s,
         hyperparameters=fno32_hyperparams,
-        test_loaders=validation_loaders_fno32,
+        test_loaders=test_loaders_fno32,
         data_processor=data_processor_fno32,
         device=device,
         track_performance=True
@@ -254,7 +254,7 @@ if __name__ == "__main__":
         model1=fno_model_128,
         model2s=fno_128s,
         hyperparameters=fno128_hyperparams,
-        test_loaders=validation_loaders_fno128,
+        test_loaders=test_loaders_fno128,
         data_processor=data_processor_fno128,
         device=device,
         track_performance=True
@@ -262,30 +262,11 @@ if __name__ == "__main__":
     results_by_model["FNO 128x128"] = fnocompare_128
 
     # ------------------------------------- Results Store ---------------------------------------
-    """
-`   "FNO 16x16": [0.45, 0.5, 0.55, 0.58, 0.6], # small
-    "FNO 32x32": [0.4,0.45,0.47, 0.5, 0.55],
-    "Codano":  [0.5, 0.55, 0.6, 0.65, 0.7],
-    "FNO 128x128": [0.45, 0.5, 0.51, 0.52, 0.53],
-    "DeepONet": [0.95, 0.96, 0.97, 0.98, 0.99]
-    -> basic_result1.pkl
-
-    "FNO 16x16": [0.55, 0.56, 0.57, 0.58, 0.6], # small
-    "FNO 32x32": [0.4,0.45,0.47, 0.5, 0.55],
-    "Codano":  [0.5, 0.55, 0.6, 0.65, 0.7],
-    "FNO 128x128": [0.45, 0.5, 0.51, 0.52, 0.53],
-    "DeepONet": [0.95, 0.96, 0.97, 0.98, 0.99],
-    -> basic_result2.pkl
-    """
 
     #Write
-    with open("compression/LowRank/results/basic_result2.pkl", "wb") as f:
+    with open("compression/LowRank/results/basic_test_result.pkl", "wb") as f:
         pickle.dump(results_by_model, f)
-
-    # # Read
-    # with open("compression/LowRank/results/basic_result1.pkl", "rb") as f:
-    #     results_by_model = pickle.load(f)
-    # print(results_by_model)
+    print(results_by_model)
 
     # ------------------------------------- Final Evaluation ---------------------------------------
     generate_graph(results_by_model, hyperparameters, "SVD_low_rank", "Rank Ratio", "%", savefile="compression/LowRank/results/basic_lowrank_performance.png")

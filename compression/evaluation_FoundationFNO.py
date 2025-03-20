@@ -62,20 +62,20 @@ print("Compressing Model.....")
 # )
 # pruned_model = pruned_model.to(device)
 
-lowrank_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model, 
-                                                   rank_ratio=0.97, # [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
-                                                   min_rank=1,
-                                                   max_rank=256,
-                                                   is_full_rank=False,
-                                                   is_compress_conv1d=False,
-                                                   is_compress_FC=False,
-                                                   is_compress_spectral=True),
-    create_replica=True
-)
+# lowrank_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: SVDLowRank(model, 
+#                                                    rank_ratio=0.97, # [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
+#                                                    min_rank=1,
+#                                                    max_rank=256,
+#                                                    is_full_rank=False,
+#                                                    is_compress_conv1d=False,
+#                                                    is_compress_FC=False,
+#                                                    is_compress_spectral=True),
+#     create_replica=True
+# )
 
-lowrank_model = lowrank_model.to(device)
+# lowrank_model = lowrank_model.to(device)
 
 # dynamic_quant_model = CompressedModel(
 #     model=fno_model,
@@ -92,12 +92,12 @@ lowrank_model = lowrank_model.to(device)
 
 # lowrank_model = lowrank_model.to(device)
 
-# dynamic_quant_model = CompressedModel(
-#     model=fno_model,
-#     compression_technique=lambda model: DynamicQuantization(model),
-#     create_replica=True
-# )
-# dynamic_quant_model = dynamic_quant_model.to(device)
+dynamic_quant_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+dynamic_quant_model = dynamic_quant_model.to(device)
 
 
 
@@ -114,23 +114,23 @@ print("Getting Result.....")
 # )
 
 
-results = compare_models(
-    model1=fno_model,
-    model2=lowrank_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device,
-    track_performance = True
-)
-
-# print("\n"*2)
-# print("Dynamic Quantization.....")
-# compare_models(
-#     model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
-#     model2=dynamic_quant_model,     # The dynamically quantized model
+# results = compare_models(
+#     model1=fno_model,
+#     model2=lowrank_model,
 #     test_loaders=test_loaders,
 #     data_processor=data_processor,
-#     device=device
+#     device=device,
+#     track_performance = True
 # )
 
-print(results)
+print("\n"*2)
+print("Dynamic Quantization.....")
+compare_models(
+    model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
+    model2=dynamic_quant_model,     # The dynamically quantized model
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device
+)
+
+#print(results)

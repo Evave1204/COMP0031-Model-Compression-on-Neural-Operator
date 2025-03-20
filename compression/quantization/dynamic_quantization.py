@@ -288,7 +288,26 @@ Replace the weight using from_tensor() if available and store an identifier in c
         
         # Just create the wrapper:
         #print(f"[Debug] Inside compress_spectral_conv for {name}!")
-        quantized_spectral = QuantizedSpectralConv(layer)
+        quantized_spectral = QuantizedSpectralConv(
+            spectral_layer=layer,
+            in_channels=layer.in_channels,
+            out_channels=layer.out_channels,
+            n_modes=layer.n_modes,
+            complex_data=layer.complex_data if hasattr(layer, "complex_data") else False,
+            max_n_modes=layer.max_n_modes if hasattr(layer, "max_n_modes") else None,
+            bias=layer.bias is not None,
+            separable=layer.separable,
+            resolution_scaling_factor=layer.resolution_scaling_factor,
+            fno_block_precision=layer.fno_block_precision if hasattr(layer, "fno_block_precision") else "full",
+            rank=layer.rank if hasattr(layer, "rank") else 0.5,
+            factorization=layer.factorization,
+            implementation=layer.implementation,
+            fixed_rank_modes=layer.fixed_rank_modes if hasattr(layer, "fixed_rank_modes") else False,
+            decomposition_kwargs=layer.decomposition_kwargs if hasattr(layer, "decomposition_kwargs") else {},
+            init_std=layer.init_std if hasattr(layer, "init_std") else "auto",
+            fft_norm=layer.fft_norm,
+            device=layer.weight.to_tensor().device if hasattr(layer.weight, "to_tensor") else None,
+        )
         self.compressed_layers[name] = quantized_spectral
         return quantized_spectral
 
@@ -345,7 +364,7 @@ Returns the modified model.
                 self.replace_module(name, quantized_module)
             elif isinstance(module, nn.Conv1d) and module.kernel_size == (1,):
                 quantized_module = self.compress_conv1d(module, name)
-                self.replace_module(name, quantized_module)
+                self.replace_module(name, quantized_module)   
             elif type(module).__name__ == "SpectralConv":
                 new_module = self.compress_spectral_conv(module, name)
                 self.replace_module(name, new_module)

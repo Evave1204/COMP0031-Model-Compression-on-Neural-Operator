@@ -49,20 +49,20 @@ class QuantizedSpectralConv2dV2(nn.Module):
         """
         val_min = tensor.min().item()
         val_max = tensor.max().item()
-        #scale = (val_max - val_min) / 65535.0
-        scale = (val_max - val_min) / 256.0
+        scale = (val_max - val_min) / 65535.0
+        #scale = (val_max - val_min) / 256.0
         if scale == 0:
             scale = 1.0
-        #q_tensor = torch.round((tensor - val_min) / scale - 32768).clamp(-32768, 32767).to(torch.int16)
-        q_tensor = torch.round((tensor - val_min) / scale - 127).clamp(-128, 127).to(torch.int8)
+        q_tensor = torch.round((tensor - val_min) / scale - 32768).clamp(-32768, 32767).to(torch.int16)
+        #q_tensor = torch.round((tensor - val_min) / scale - 127).clamp(-128, 127).to(torch.int8)
         return q_tensor, scale, val_min, None, None, None
 
     def _dequantize_int16(self, q_int16: torch.Tensor, scale: float, min_val: float) -> torch.Tensor:
         """
         Dequantizes an int16 tensor back to float.
         """
-        #return (q_int16.float() + 32768) * scale + min_val
-        return (q_int16.float() + 127) * scale + min_val
+        return (q_int16.float() + 32768) * scale + min_val
+        #return (q_int16.float() + 127) * scale + min_val
 
     def _dequantize_weights(self):
         """

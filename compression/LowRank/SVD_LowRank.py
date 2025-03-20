@@ -35,9 +35,9 @@ class SVDLowRank:
                  model, 
                  rank_ratio=0.5, 
                  min_rank=1, 
-                 max_rank=256,
+                 max_rank=1028,
                  is_full_rank = False,
-                 is_compress_conv1d=True, 
+                 is_compress_conv1d=False, 
                  is_compress_spectral=True,
                  is_compress_FC=True):
         
@@ -205,7 +205,7 @@ class SVDLowRank:
         weight1 = (Vh_trunc.T).reshape(C_in, rank, 1, 1).expand(-1, -1, H, W)
         weight2 = (U_trunc @ torch.diag(S_trunc)).reshape(C_out, H, W, rank).permute(3, 0, 1, 2)
         total_n_params = weight1.numel() + weight2.numel()
-        if (total_n_params > original_weight.numel()):
+        if (total_n_params >= original_weight.numel()):
             self.compressed_layers[name] = layer
         else:
             new_layer = DoubleSpectralConv(in_channels=C_in,
@@ -413,7 +413,6 @@ class SVDLowRank:
                 self.compress_foundation_spectral_conv(module,name)
             elif self.is_compress_spectral and ("SpectralConvKernel2d" == type(module).__name__):
                 self.compress_spectral_conv_2d_kernel(module, name)
-                break
 
         # Replace original layers with compressed versions
         for name, new_layer in self.compressed_layers.items():

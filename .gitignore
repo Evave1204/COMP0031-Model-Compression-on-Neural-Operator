@@ -1,4 +1,5 @@
 venv/
+compression/LowRank/results/
 models/
 !neuralop/models/
 # weights and biases

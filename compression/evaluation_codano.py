@@ -5,7 +5,7 @@ from compression.LowRank.SVD_LowRank import SVDLowRank
 from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
-from compression.utils.evaluation_util import evaluate_model, compare_models
+from compression.utils.evaluation_util import evaluate_model, compare_models, compare_models_hyperparams
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
 
 torch.manual_seed(42)
@@ -50,11 +50,11 @@ fno_model = fno_model.to(device)
 
 
 validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
-    n_train=1000,
+    n_train=10000,
     batch_size=16,
     test_resolutions=[128],
     n_tests=[1000],
-    test_batch_sizes=[16],
+    test_batch_sizes=[4, 4],
     encode_input=False, 
     encode_output=False,
 )
@@ -68,73 +68,79 @@ data_processor = CODANODataProcessor(
 ###################################################
 # Global Magnitude Pruning  
 ###################################################
-pruned_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.05),
-    create_replica=True
-)
-pruned_model = pruned_model.to(device)
+# pruned_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.05),
+#     create_replica=True
+# )
+# pruned_model = pruned_model.to(device)
 
 #####################################
 # SVD Low-Rank Decomposition 
 #####################################
 # there are only few layers can be factorized but after factorization, the loss increased a lot
 # low rank is not working on DOCANO
-lowrank_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model=model, 
-                                                   rank_ratio=0.6, # option = [0.2, 0.4, 0.6, 0.8]
-                                                   min_rank=1,
-                                                   max_rank=8, # option = [8, 16, 32, 64, 128, 256]
-                                                   is_compress_conv1d=True,
-                                                   is_compress_FC=False,
-                                                   is_compress_spectral=False), # no need to factorize spectral due to small
-    create_replica=True
-)
-lowrank_model = lowrank_model.to(device)
 
-#####################################
-# Quant
-#####################################
-dynamic_quant_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: DynamicQuantization(model),
-    create_replica=True
-)
-dynamic_quant_model = dynamic_quant_model.to(device)
+hyperparameters = {
+    "FNO 16x16": [0.45, 0.5, 0.55, 0.58, 0.6], # small
+    "FNO 32x32": [0.4,0.45,0.47, 0.5, 0.55],
+    "Codano":  [0.5, 0.55, 0.6, 0.65, 0.7],
+    "FNO 128x128": [0.45, 0.5, 0.51, 0.52, 0.53],
+    "DeepONet": [0.95, 0.96, 0.97, 0.98, 0.99],
+}
+codanos = []
+codano_hyperparams = hyperparameters["Codano"]
+for ratio in codano_hyperparams:
+    codanolowrank_model = CompressedModel(
+        model=fno_model,
+        compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio,                                                           
+                                                        is_compress_conv1d=True,
+                                                        is_compress_spectral=False),
+        create_replica=True
+    )
+    codanolowrank_model = codanolowrank_model.to(device)
+    codanos.append(codanolowrank_model)
 
-
-
-# Start Compression ..
-
-print("\n"*2)
-print("Pruning.....")
-compare_models(
+codano_compare = compare_models_hyperparams(
     model1=fno_model,
-    model2=pruned_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device
-)
-
-print("\n"*2)
-print("Low Ranking.....")
-compare_models(
-    model1=fno_model,
-    model2=lowrank_model,
-    test_loaders=test_loaders,
+    model2s=codanos,
+    hyperparameters=codano_hyperparams,
+    test_loaders=validation_loaders,
     data_processor=data_processor,
     device=device,
     track_performance=True
 )
 
+#####################################
+# Quant
+#####################################
+# dynamic_quant_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: DynamicQuantization(model),
+#     create_replica=True
+# )
+# dynamic_quant_model = dynamic_quant_model.to(device)
 
-print("\n"*2)
-print("Dynamic Quantization.....")
-compare_models(
-    model1=fno_model,               # can remain on CPU or GPU, but if device='cpu', it moves it
-    model2=dynamic_quant_model,     # this is dynamic quant model on CPU
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device
-)
+
+
+# Start Compression ..
+
+# print("\n"*2)
+# print("Pruning.....")
+# compare_models(
+#     model1=fno_model,
+#     model2=pruned_model,
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device
+# )
+
+# print("\n"*2)
+# print("Dynamic Quantization.....")
+# compare_models(
+#     model1=fno_model,               # can remain on CPU or GPU, but if device='cpu', it moves it
+#     model2=dynamic_quant_model,     # this is dynamic quant model on CPU
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device
+# )

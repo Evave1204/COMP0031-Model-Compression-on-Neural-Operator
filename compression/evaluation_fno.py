@@ -6,7 +6,7 @@ from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 
-from compression.utils.evaluation_util import evaluate_model, compare_models
+from compression.utils.evaluation_util import evaluate_model, compare_models, compare_models_hyperparams
 from compression.utils.fno_util import optional_fno
 #import pandas as pd
 
@@ -29,18 +29,22 @@ fno_model = fno_model.to(device)
 # )
 # pruned_model = pruned_model.to(device)
 
-# lowrank_model = CompressedModel(
-#     model=fno_model,
-#     compression_technique=lambda model: SVDLowRank(model, 
-#                                                    rank_ratio=0.6, # option =  [0.5, 0.55, 0.6, 0.65, 0.68]// [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
-#                                                    min_rank=1,
-#                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-#                                                    is_compress_conv1d=False,
-#                                                    is_compress_FC=False,
-#                                                    is_compress_spectral=True),
-#     create_replica=True
-# )
-# lowrank_model = lowrank_model.to(device)
+hyperparameters = [0.54,0.55,0.56,0.6]
+models = []
+for ratio in hyperparameters:   
+    lowrank_model = CompressedModel(
+        model=fno_model,
+        compression_technique=lambda model: SVDLowRank(model, 
+                                                    rank_ratio=ratio, # option =  [0.5, 0.55, 0.6, 0.65, 0.68]// [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
+                                                    min_rank=1,
+                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                    is_compress_conv1d=False,
+                                                    is_compress_FC=False,
+                                                    is_compress_spectral=True),
+        create_replica=True
+    )
+    lowrank_model = lowrank_model.to(device)
+    models.append(lowrank_model)
 
 # dynamic_quant_model = CompressedModel(
 #     model=fno_model,
@@ -75,6 +79,18 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 #     device=device
 # )
 
+print("\n"*2)
+print("Low Ranking.....")
+results = compare_models_hyperparams(
+    model1=fno_model,
+    model2s=models,
+    hyperparameters=hyperparameters,
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device,
+    track_performance = True
+)
+
 # print("\n"*2)
 # print("Low Ranking.....")
 # results = compare_models(
@@ -85,15 +101,3 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 #     device=device,
 #     track_performance = True
 # )
-
-print("\n"*2)
-print("Dynamic Quantization.....")
-compare_models(
-    model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
-    model2=dynamic_quant_model,     # The dynamically quantized model
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device
-)
-
-

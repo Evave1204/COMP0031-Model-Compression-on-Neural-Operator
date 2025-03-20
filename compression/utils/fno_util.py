@@ -72,6 +72,7 @@ def optional_fno(resolution):
             domain_padding=None,
             stabilizer=None,
             dropout=0.0)
+        
         fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-17-18-57.pt", weights_only=False))
         fno_model.eval()    
         validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
@@ -80,7 +81,7 @@ def optional_fno(resolution):
             test_resolutions=[16],
             n_tests=[10000],
             test_batch_sizes=[16],
-            encode_input=True, 
+            encode_input=False, 
             encode_output=False,
         )
         return fno_model, validation_loaders, test_loaders, data_processor
@@ -139,10 +140,10 @@ def optional_fno(resolution):
         fno_model.eval()
 
         validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
-            n_train=100,
+            n_train=10000,
             batch_size=16,
             test_resolutions=[128],
-            n_tests=[10000],
+            n_tests=[1000],
             test_batch_sizes=[16],
             encode_input=True, 
             encode_output=False,

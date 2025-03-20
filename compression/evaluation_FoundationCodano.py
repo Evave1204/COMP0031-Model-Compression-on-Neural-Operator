@@ -89,7 +89,7 @@ if __name__ == "__main__":
         ntrain=params.get('ntrain'),
         ntest=40,
         batch_size = 1,
-        train_test_split = 0.1, # just for test
+        train_test_split = 0.001, # just for test
         sample_per_inlet=params.sample_per_inlet
     )
 
@@ -107,50 +107,50 @@ if __name__ == "__main__":
                                 "params": params,
                                 "stage": stage,
                                 "input_mesh":input_mesh}
-    # Compress Models
-    prune_model = CompressedModel(
-        model=codano_model,
-        compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.99),
-        create_replica=True
-    )
-
-    prune_model = prune_model.to(device)
-
-
-    # lowrank_model = CompressedModel(
+    # # Compress Models
+    # prune_model = CompressedModel(
     #     model=codano_model,
-    #     compression_technique=lambda model: SVDLowRank(model, 
-    #                                                 rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-    #                                                 min_rank=1,
-    #                                                 max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-    #                                                 is_compress_conv1d=False,
-    #                                                 is_compress_FC=False,
-    #                                                 is_compress_spectral=True),
+    #     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.9),
     #     create_replica=True
     # )
-    # lowrank_model = lowrank_model.to(device)
 
-    # Start compare models
-    print("\n"*2)
-    print("Pruning.....")
-    compare_models(
-        model1=codano_model,
-        model2=prune_model,
-        test_loaders=test_dataloader,
-        data_processor=None,
-        device=device,
-        track_performance = True,
-        evaluation_params = codano_evaluation_params
+    # prune_model = prune_model.to(device)
+
+
+    lowrank_model = CompressedModel(
+        model=codano_model,
+        compression_technique=lambda model: SVDLowRank(model, 
+                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+                                                    min_rank=1,
+                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                    is_compress_conv1d=False,
+                                                    is_compress_FC=True,
+                                                    is_compress_spectral=True),
+        create_replica=True
     )
+    lowrank_model = lowrank_model.to(device)
 
+    # # Start compare models
     # print("\n"*2)
-    # print("Low Ranking.....")
+    # print("Pruning.....")
     # compare_models(
     #     model1=codano_model,
-    #     model2=lowrank_model,
+    #     model2=prune_model,
     #     test_loaders=test_dataloader,
     #     data_processor=None,
     #     device=device,
     #     track_performance = True,
     #     evaluation_params = codano_evaluation_params
     # )
+
+    print("\n"*2)
+    print("Low Ranking.....")
+    compare_models(
+        model1=codano_model,
+        model2=lowrank_model,
+        test_loaders=validation_dataloader,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = codano_evaluation_params
+    )

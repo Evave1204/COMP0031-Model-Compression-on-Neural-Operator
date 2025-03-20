@@ -11,7 +11,7 @@ from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.utils.fno_util import optional_fno
 
 fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="low")
-device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu') # ('cuda' if torch.cuda.is_available() else 'cpu')
 fno_model = fno_model.to(device)
 
 
@@ -26,35 +26,37 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
 )
 
 
-pruned_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.05),
-    create_replica=True
-)
-pruned_model = pruned_model.to(device)
+# pruned_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.05),
+#     create_replica=True
+# )
+# pruned_model = pruned_model.to(device)
 
-lowrank_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
-                                                   min_rank=8, max_rank=16),
-    create_replica=True
-)
-lowrank_model = lowrank_model.to(device)
+# lowrank_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: SVDLowRank(model, rank_ratio=0.7, 
+#                                                    min_rank=8, max_rank=16),
+#     create_replica=True
+# )
+# lowrank_model = lowrank_model.to(device)
 
-lowrank_compare = compare_models(
-    model1=fno_model,
-    model2=lowrank_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device,
-    track_performance=True
-)
+# lowrank_compare = compare_models(
+#     model1=fno_model,
+#     model2=lowrank_model,
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device,
+#     track_performance=True
+# )
 
 quantised_model = CompressedModel(
     model=fno_model,
-    compression_technique=lambda model: UniformQuantisation(model, num_bits=8),
+    compression_technique=lambda model: UniformQuantisation(model, 
+                                                            num_bits=8),
     create_replica=True
 )
+quantised_model = quantised_model.to(device)
 
 quantised_compare = compare_models(
     model1=fno_model,
@@ -62,5 +64,5 @@ quantised_compare = compare_models(
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device,
-    track_performance=True
+    # track_performance=True
 )

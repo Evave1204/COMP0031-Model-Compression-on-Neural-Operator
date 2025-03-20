@@ -129,17 +129,13 @@ if __name__ == "__main__":
 
     # ------------------------------------- INIT INFO ---------------------------------------
     hyperparameters = {
-        "FNO 16x16": [0.5, 0.55, 0.6, 0.65, 0.7], # small
-        "FNO 32x32": [0.5, 0.55, 0.6, 0.65, 0.7],
+        "FNO 16x16": [0.45, 0.5, 0.55, 0.58, 0.6], # small
+        "FNO 32x32": [0.4,0.45,0.47, 0.5, 0.55],
         "Codano":  [0.5, 0.55, 0.6, 0.65, 0.7],
-        "FNO 128x128": [0.7, 0.75, 0.8, 0.85, 0.9],
-        "DeepONet": [0.8, 0.85, 0.9, 0.95, 0.99],
+        "FNO 128x128": [0.45, 0.5, 0.51, 0.52, 0.53],
+        "DeepONet": [0.95, 0.96, 0.97, 0.98, 0.99],
     }
-    number_of_hyperparameters = 5
     results_by_model = {'FNO 16x16': {}, 'FNO 32x32': {}, 'FNO 128x128': {}, 'Codano': {}, 'DeepONet': {}}
-
-
-
 
 # ================================= RUN COMPARISON =======================================
 
@@ -150,7 +146,9 @@ if __name__ == "__main__":
     for ratio in codano_hyperparams:
         codanolowrank_model = CompressedModel(
             model=codano_model,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
+            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio,                                                           
+                                                           is_compress_conv1d=True,
+                                                           is_compress_spectral=False),
             create_replica=True
         )
         codanolowrank_model = codanolowrank_model.to(device)

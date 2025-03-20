@@ -35,7 +35,7 @@ class SVDLowRank:
                  model, 
                  rank_ratio=0.5, 
                  min_rank=1, 
-                 max_rank=256,
+                 max_rank=1028,
                  is_full_rank = False,
                  is_compress_conv1d=False, 
                  is_compress_spectral=True,
@@ -205,7 +205,7 @@ class SVDLowRank:
         weight1 = (Vh_trunc.T).reshape(C_in, rank, 1, 1).expand(-1, -1, H, W)
         weight2 = (U_trunc @ torch.diag(S_trunc)).reshape(C_out, H, W, rank).permute(3, 0, 1, 2)
         total_n_params = weight1.numel() + weight2.numel()
-        if (total_n_params > original_weight.numel()):
+        if (total_n_params >= original_weight.numel()):
             self.compressed_layers[name] = layer
         else:
             new_layer = DoubleSpectralConv(in_channels=C_in,

@@ -114,12 +114,12 @@ codano_compare = compare_models_hyperparams(
 #####################################
 # Quant
 #####################################
-# dynamic_quant_model = CompressedModel(
-#     model=fno_model,
-#     compression_technique=lambda model: DynamicQuantization(model),
-#     create_replica=True
-# )
-# dynamic_quant_model = dynamic_quant_model.to(device)
+dynamic_quant_model = CompressedModel(
+    model=fno_model,
+    compression_technique=lambda model: DynamicQuantization(model),
+    create_replica=True
+)
+dynamic_quant_model = dynamic_quant_model.to(device)
 
 
 
@@ -135,12 +135,12 @@ codano_compare = compare_models_hyperparams(
 #     device=device
 # )
 
-# print("\n"*2)
-# print("Dynamic Quantization.....")
-# compare_models(
-#     model1=fno_model,               # can remain on CPU or GPU, but if device='cpu', it moves it
-#     model2=dynamic_quant_model,     # this is dynamic quant model on CPU
-#     test_loaders=test_loaders,
-#     data_processor=data_processor,
-#     device=device
-# )
+print("\n"*2)
+print("Dynamic Quantization.....")
+compare_models(
+    model1=fno_model,               # can remain on CPU or GPU, but if device='cpu', it moves it
+    model2=dynamic_quant_model,     # this is dynamic quant model on CPU
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device
+)

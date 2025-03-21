@@ -48,7 +48,8 @@ class QuantizedLinear(nn.Module):
         self.scale = linear.weight.data.abs().max().item() / int8_max
         '''
         # Compute scale using (max - min) / 256
-        self.scale = (w_max - w_min) / 256
+        #self.scale = (w_max - w_min) / 256
+        self.scale = (w_max - w_min) / 65535
 
         if self.scale == 0:
             self.scale = 1.0
@@ -68,7 +69,8 @@ class QuantizedLinear(nn.Module):
         q_weight = (linear.weight.data / self.scale).round().clamp(-128, 127).to(torch.int8)
         '''
         # Quantize weight
-        q_weight = torch.round((linear.weight.data - w_min) / self.scale - 127).clamp(-127, 127).to(torch.int8)
+        #q_weight = torch.round((linear.weight.data - w_min) / self.scale - 127).clamp(-127, 127).to(torch.int8)
+        q_weight = torch.round((linear.weight.data - w_min) / self.scale - 32768).clamp(-32768, 32767).to(torch.int16)
         self.register_buffer('q_weight', q_weight)
 
         # Store min for dequantization
@@ -88,14 +90,16 @@ class QuantizedLinear(nn.Module):
 
             b_min = linear.bias.data.min().item()
             b_max = linear.bias.data.max().item()
-            self.bias_scale = (b_max - b_min) / 256
+            #self.bias_scale = (b_max - b_min) / 256
+            self.bias_scale = (b_max - b_min) / 65535
 
             if self.bias_scale == 0:
                 self.bias_scale = 1.0
             '''
             q_bias = (linear.bias.data / self.bias_scale).round().clamp(-128, 127).to(torch.int8)
             '''
-            q_bias = torch.round((linear.bias.data - b_min) / self.bias_scale - 127).clamp(-127, 127).to(torch.int8)
+            #q_bias = torch.round((linear.bias.data - b_min) / self.bias_scale - 127).clamp(-127, 127).to(torch.int8)
+            q_bias = torch.round((linear.bias.data - b_min) / self.bias_scale - 32768).clamp(-32768, 32767).to(torch.int16)
             self.register_buffer('q_bias', q_bias)
             self.register_buffer('b_min', torch.tensor(b_min, dtype=torch.float32))
         else:
@@ -118,8 +122,10 @@ class QuantizedLinear(nn.Module):
         bias = self.q_bias.float() * self.bias_scale if self.has_bias else None
         '''
         # Dequantize weight
-        weight = (self.q_weight.float() + 127) * self.scale + self.w_min
-        bias = (self.q_bias.float() + 127) * self.bias_scale + self.b_min if self.has_bias else None
+        #weight = (self.q_weight.float() + 127) * self.scale + self.w_min
+        weight = (self.q_weight.float() + 32768) * self.scale + self.w_min
+        #bias = (self.q_bias.float() + 127) * self.bias_scale + self.b_min if self.has_bias else None
+        bias = (self.q_bias.float() + 32768) * self.bias_scale + self.b_min if self.has_bias else None
         return nn.functional.linear(x, weight, bias)
 
 
@@ -167,13 +173,15 @@ class QuantizedConv1d(nn.Module):
         w_max = conv.weight.data.max().item()
 
         # Ensure the scale is never zero (to avoid division errors)
-        self.scale = (w_max - w_min) / 256
+        #self.scale = (w_max - w_min) / 256
+        self.scale = (w_max - w_min) / 65535
         if self.scale == 0:
             self.scale = 1.0
         '''    
         q_weight = (conv.weight.data / self.scale).round().clamp(-128, 127).to(torch.int8)
         '''
-        q_weight = torch.round((conv.weight.data - w_min) / self.scale - 127).clamp(-127, 127).to(torch.int8)
+        #q_weight = torch.round((conv.weight.data - w_min) / self.scale - 127).clamp(-127, 127).to(torch.int8)
+        q_weight = torch.round((conv.weight.data - w_min) / self.scale - 32768).clamp(-32768, 32768).to(torch.int16)
         self.register_buffer('q_weight', q_weight)
         self.register_buffer('w_min', torch.tensor(w_min, dtype=torch.float32))
 
@@ -187,14 +195,16 @@ class QuantizedConv1d(nn.Module):
             '''
             b_min = conv.bias.data.min().item()
             b_max = conv.bias.data.max().item()
-            self.bias_scale = (b_max - b_min) / 256
+            #self.bias_scale = (b_max - b_min) / 256
+            self.bias_scale = (b_max - b_min) / 65535
 
             if self.bias_scale == 0:
                 self.bias_scale = 1.0
             '''
             q_bias = (conv.bias.data / self.bias_scale).round().clamp(-128, 127).to(torch.int8)
             '''
-            q_bias = torch.round((conv.bias.data - b_min) / self.bias_scale - 127).clamp(-127, 127).to(torch.int8)
+            #q_bias = torch.round((conv.bias.data - b_min) / self.bias_scale - 127).clamp(-127, 127).to(torch.int8)
+            q_bias = torch.round((conv.bias.data - b_min) / self.bias_scale - 32768).clamp(-32768, 32767).to(torch.int16)
             self.register_buffer('q_bias', q_bias)
             self.register_buffer('b_min', torch.tensor(b_min, dtype=torch.float32))
         else:
@@ -215,8 +225,11 @@ class QuantizedConv1d(nn.Module):
         bias = self.q_bias.float() * self.bias_scale if self.has_bias else None
         '''
         # Dequantize weight
-        weight = (self.q_weight.float() + 127) * self.scale + self.w_min
-        bias = (self.q_bias.float() + 127) * self.bias_scale + self.b_min if self.has_bias else None
+        # weight = (self.q_weight.float() + 127) * self.scale + self.w_min
+        # bias = (self.q_bias.float() + 127) * self.bias_scale + self.b_min if self.has_bias else None
+        weight = (self.q_weight.float() + 32768) * self.scale + self.w_min
+        bias = (self.q_bias.float() + 32768) * self.bias_scale + self.b_min if self.has_bias else None
+
         return nn.functional.conv1d(x, weight, bias, self.stride, self.padding, self.dilation, self.groups)
 
 

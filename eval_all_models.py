@@ -19,6 +19,7 @@ from ruamel.yaml.scalarfloat import ScalarFloat
 
 # --- Adjust sys.path so that the repository root is found ---
 repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
+
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
@@ -45,15 +46,10 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
     encode_output=False,
 )
 
-# --- Updated load_and_prune_model function using compare_models ---
 def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, device, prune_ratio=0.2, technique="layer"):
-    """
-    Load a model from weight_path, create a deep copy for pruning,
-    apply the selected pruning technique, and then evaluate using compare_models.
-    """
     # Instantiate the model with training parameters.
     if ModelClass.__name__ == "FNO":
-        # Use parameters from darcy_config.yaml (fno2d section)
+        # FNO-specific parameters (from your code)
         n_modes = (32, 32)
         in_channels = 1
         out_channels = 1
@@ -66,7 +62,7 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
             separable=False, dropout=0.0, rank=1.0
         )
     elif ModelClass.__name__ == "DeepONet":
-        # Use parameters from deeponet_darcy_config.yaml
+        # DeepONet-specific parameters (from your code)
         train_resolution = 128
         in_channels = 1
         out_channels = 1
@@ -74,25 +70,6 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
         branch_layers = [256, 256, 256, 256, 128]
         trunk_layers = [256, 256, 256, 256, 128]
         base_model = ModelClass(train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers)
-    # elif ModelClass.__name__ == "GINO": # ENABLE WHEN NEEDED
-    #     # Use parameters from gino_carcfd_config.yaml (adjust as necessary)
-    #     n_modes = (16, 16, 16)
-    #     in_channels = 1
-    #     out_channels = 1
-    #     hidden_channels = 64
-    #     base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
-    # elif ModelClass.__name__ == "CODANO": # ENABLE WHEN NEEDED
-    #     # Use parameters from darcy_config_codano.yaml
-    #     in_channels = 1
-    #     output_variable_codimension = 1
-    #     hidden_variable_codimension = 2
-    #     lifting_channels = 4
-    #     base_model = ModelClass(
-    #         in_channels=in_channels,
-    #         output_variable_codimension=output_variable_codimension,
-    #         hidden_variable_codimension=hidden_variable_codimension,
-    #         lifting_channels=lifting_channels
-    #     )
     else:
         base_model = ModelClass()
 
@@ -127,6 +104,29 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
     )
 
     return base_model, pruned_model, results
+
+# --- Updated load_and_prune_model functionfor GINO AND CODANO ---
+    # Instantiate the model with training parameters.
+    # elif ModelClass.__name__ == "GINO": # ENABLE WHEN NEEDED
+    #     # Use parameters from gino_carcfd_config.yaml (adjust as necessary)
+    #     n_modes = (16, 16, 16)
+    #     in_channels = 1
+    #     out_channels = 1
+    #     hidden_channels = 64
+    #     base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
+    # elif ModelClass.__name__ == "CODANO": # ENABLE WHEN NEEDED
+    #     # Use parameters from darcy_config_codano.yaml
+    #     in_channels = 1
+    #     output_variable_codimension = 1
+    #     hidden_variable_codimension = 2
+    #     lifting_channels = 4
+    #     base_model = ModelClass(
+    #         in_channels=in_channels,
+    #         output_variable_codimension=output_variable_codimension,
+    #         hidden_variable_codimension=hidden_variable_codimension,
+    #         lifting_channels=lifting_channels
+    #     )
+
 
 def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -168,38 +168,38 @@ def main():
     # our_codano_weight = codano_weight_path  # Replace with separate path if available.
     # their_codano_weight = codano_weight_path  # Replace with separate path if available.
 
-    models_info_section2 = {
-        "FNO": {
-            "our": our_fno_weight,
-            "theirs": their_fno_weight
-        },
-        # "Codano": {
-            # "our": our_codano_weight,
-            # "theirs": their_codano_weight
-        # }
-    }
+    # models_info_section2 = {
+    #     "FNO": {
+    #         "our": our_fno_weight,
+    #         "theirs": their_fno_weight
+    #     },
+    #     # "Codano": {
+    #         # "our": our_codano_weight,
+    #         # "theirs": their_codano_weight
+    #     # }
+    # }
 
-    results_section2 = {}
-    print("\n=== Section 2: Comparing 'Our' vs 'Their' weights for FNO and Codano using {} pruning ===".format(technique))
-    for model_name, weight_paths in models_info_section2.items():
-        results_section2[model_name] = {}
-        ModelClass = FNO if model_name == "FNO" else CODANO
+    # results_section2 = {}
+    # print("\n=== Section 2: Comparing 'Our' vs 'Their' weights for FNO and Codano using {} pruning ===".format(technique))
+    # for model_name, weight_paths in models_info_section2.items():
+    #     results_section2[model_name] = {}
+    #     ModelClass = FNO if model_name == "FNO" else CODANO
 
-        for variant, weight_path in weight_paths.items():
-            print(f"\nProcessing {model_name} ({variant})...")
-            try:
-                base_model, pruned_model, results = load_and_prune_model(
-                    ModelClass, weight_path, test_loaders, data_processor, device, prune_ratio=0.2, technique=technique
-                )
-                results_section2[model_name][variant] = results
-                print(f"{model_name} ({variant}) evaluation results: {results}")
-            except Exception as e:
-                print(f"Error processing {model_name} ({variant}): {e}")
+    #     for variant, weight_path in weight_paths.items():
+    #         print(f"\nProcessing {model_name} ({variant})...")
+    #         try:
+    #             base_model, pruned_model, results = load_and_prune_model(
+    #                 ModelClass, weight_path, test_loaders, data_processor, device, prune_ratio=0.2, technique=technique
+    #             )
+    #             results_section2[model_name][variant] = results
+    #             print(f"{model_name} ({variant}) evaluation results: {results}")
+    #         except Exception as e:
+    #             print(f"Error processing {model_name} ({variant}): {e}")
 
     print("\nSection 1 Results:")
     print(results_section1)
-    print("\nSection 2 Results:")
-    print(results_section2)
+    # print("\nSection 2 Results:")
+    # print(results_section2)
 
 if __name__ == "__main__":
     main()

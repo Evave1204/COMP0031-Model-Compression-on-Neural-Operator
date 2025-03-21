@@ -121,7 +121,7 @@ if __name__ == "__main__":
     validation_loaders_fcodano, test_loaders_fcodano = dataset_fcodano.get_validation_test_dataloader(
         params.mu_list, params.dt,
         ntrain=params.get('ntrain'),
-        ntest=40,
+        ntest=400,
         batch_size = 1,
         sample_per_inlet=params.sample_per_inlet
     )
@@ -137,14 +137,14 @@ if __name__ == "__main__":
 
     # ------------------------------------- INIT INFO ---------------------------------------
     hyperparameters = {
-        "Foundation FNO": [0.85, 0.9, 0.95, 0.97,0.98,0.99],
-        "Foundation Codano": [0.75, 0.8, 0.85, 0.9, 0.95] # large
+        "Foundation FNO": [0.98,0.99],
+        "Foundation Codano": [0.75, 0.8] 
     }
-    results_by_model = {'Foundation FNO': {}, 'Foundation Codano': {}, 'Foundation Codano Linear':{}}
+    results_by_model = {'Foundation FNO': {}, 'Foundation Codano': {}}
 
 # ================================= RUN COMPARISON =======================================
     # Read
-    with open("compression/LowRank/results/foundation_result2.pkl", "rb") as f:
+    with open("compression/LowRank/results/foundation_test_result.pkl", "rb") as f:
         results_by_model = pickle.load(f)
     print(results_by_model)
 
@@ -166,44 +166,44 @@ if __name__ == "__main__":
     #     model1=ffno_model,
     #     model2s=foundation_fnos,
     #     hyperparameters = ffno_hyperparams,
-    #     test_loaders=validation_loaders_ffno,
+    #     test_loaders=test_loaders_ffno,
     #     data_processor=None,
     #     device=device,
     #     track_performance = True
     # )
-    # results_by_model["Foundation FNO"]["Comparison"].update(ffnocompare["Comparison"])
+    # results_by_model["Foundation FNO"] = ffnocompare
 
-    # # ------------------------------------- FOUNDATION CODANO ---------------------------------------
-    # print("<"+"="*50, "Processing Foundation Codano", 50*"="+">")
-    # foundation_codanos = []
-    # fcodano_hyperparams = hyperparameters["Foundation Codano"]
-    # for ratio in fcodano_hyperparams:
-    #     fcodanolowrank_model = CompressedModel(
-    #         model=fcodano_model,
-    #         compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio, is_compress_spectral=False, is_compress_conv1d=True),
-    #         create_replica=True
-    #     )
-    #     fcodanolowrank_model = fcodanolowrank_model.to(device)
-    #     foundation_codanos.append(fcodanolowrank_model)
+    # ------------------------------------- FOUNDATION CODANO ---------------------------------------
+    print("<"+"="*50, "Processing Foundation Codano", 50*"="+">")
+    foundation_codanos = []
+    fcodano_hyperparams = hyperparameters["Foundation Codano"]
+    for ratio in fcodano_hyperparams:
+        fcodanolowrank_model = CompressedModel(
+            model=fcodano_model,
+            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio, is_compress_spectral=True, is_compress_FC=False),
+            create_replica=True
+        )
+        fcodanolowrank_model = fcodanolowrank_model.to(device)
+        foundation_codanos.append(fcodanolowrank_model)
 
-    # fcodano_compare = compare_models_hyperparams(
-    #     model1=fcodano_model,
-    #     model2s=foundation_codanos,
-    #     hyperparameters=fcodano_hyperparams,
-    #     test_loaders=validation_loaders_fcodano,
-    #     data_processor=None,
-    #     device=device,
-    #     track_performance = True,
-    #     evaluation_params = fcodano_evaluation_params
-    # )
-    # results_by_model["Foundation Codano Linear"] = fcodano_compare
+    fcodano_compare = compare_models_hyperparams(
+        model1=fcodano_model,
+        model2s=foundation_codanos,
+        hyperparameters=fcodano_hyperparams,
+        test_loaders=test_loaders_fcodano,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = fcodano_evaluation_params
+    )
+    results_by_model["Foundation Codano"] = fcodano_compare
 
-    # # ------------------------------------- Results Store ---------------------------------------
-    # with open("compression/LowRank/results/foundation_result2.pkl", "wb") as f:
-    #     pickle.dump(results_by_model, f)
+    # ------------------------------------- Results Store ---------------------------------------
+    with open("compression/LowRank/results/foundation_test_result.pkl", "wb") as f:
+        pickle.dump(results_by_model, f)
 
 
     # # ------------------------------------- Final Evaluation ---------------------------------------
-    # print(results_by_model)
+    print(results_by_model)
 
-    generate_graph(results_by_model, hyperparameters, "SVD_low_rank", "Rank Ratio", "%", savefile="compression/LowRank/results/foundation_lowrank_performance.png")
+    generate_graph(results_by_model, hyperparameters, "SVD_low_rank", "Rank Ratio", "%", savefile="compression/LowRank/results/foundation_test_lowrank_performance.png")

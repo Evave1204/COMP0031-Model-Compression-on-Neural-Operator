@@ -15,6 +15,7 @@ from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
+from compression.utils.count_params_util import count_selected_layers
 from compression.utils.codano_util import missing_variable_testing, CodanoYParams
 
 # we should use scatter to accerlaerate
@@ -63,7 +64,6 @@ if __name__ == "__main__":
 
     codano_model.load_state_dict(torch.load(params.model_path), strict=False)
     codano_model = codano_model.cuda().eval()
-    print(codano_model)
 
     variable_encoder.load_encoder(
                     "NS", params.NS_variable_encoder_path)
@@ -106,6 +106,9 @@ if __name__ == "__main__":
                                 "params": params,
                                 "stage": stage,
                                 "input_mesh":input_mesh}
+    print(codano_model)
+
+
     # # Compress Models
     # prune_model = CompressedModel(
     #     model=codano_model,
@@ -142,14 +145,14 @@ if __name__ == "__main__":
     #     evaluation_params = codano_evaluation_params
     # )
 
-    print("\n"*2)
-    print("Low Ranking.....")
-    compare_models(
-        model1=codano_model,
-        model2=codano_model,
-        test_loaders=validation_dataloader,
-        data_processor=None,
-        device=device,
-        track_performance = True,
-        evaluation_params = codano_evaluation_params
-    )
+    # print("\n"*2)
+    # print("Low Ranking.....")
+    # compare_models(
+    #     model1=codano_model,
+    #     model2=codano_model,
+    #     test_loaders=validation_dataloader,
+    #     data_processor=None,
+    #     device=device,
+    #     track_performance = True,
+    #     evaluation_params = codano_evaluation_params
+    # )

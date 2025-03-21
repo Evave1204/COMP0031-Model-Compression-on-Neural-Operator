@@ -85,45 +85,45 @@ if __name__ == "__main__":
     )
 
 
-    # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
-    deeponet_model = DeepONet(
-    train_resolution=128,
-    in_channels=1,
-    out_channels=1, 
-    hidden_channels=64,
-    branch_layers=[256, 256, 256, 256, 128],
-    trunk_layers=[256, 256, 256, 256, 128],
-    positional_embedding='grid',
-    non_linearity='gelu',
-    norm='instance_norm',
-    dropout=0.1
-    )
+    # # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
+    # deeponet_model = DeepONet(
+    # train_resolution=128,
+    # in_channels=1,
+    # out_channels=1, 
+    # hidden_channels=64,
+    # branch_layers=[256, 256, 256, 256, 128],
+    # trunk_layers=[256, 256, 256, 256, 128],
+    # positional_embedding='grid',
+    # non_linearity='gelu',
+    # norm='instance_norm',
+    # dropout=0.1
+    # )
 
-    deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt", weights_only=False))
-    deeponet_model.eval()
-    deeponet_model = deeponet_model.to(device)
+    # deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt", weights_only=False))
+    # deeponet_model.eval()
+    # deeponet_model = deeponet_model.to(device)
 
-    validation_loaders_deeponet, test_loaders_deeponet, data_processor_deeponet = load_darcy_flow_small_validation_test(
-        n_train=10000,
-        batch_size=16,
-        test_resolutions=[128],
-        n_tests=[1000],
-        test_batch_sizes=[4, 4],
-        encode_input=False, 
-        encode_output=False,
-    )
+    # validation_loaders_deeponet, test_loaders_deeponet, data_processor_deeponet = load_darcy_flow_small_validation_test(
+    #     n_train=10000,
+    #     batch_size=16,
+    #     test_resolutions=[128],
+    #     n_tests=[1000],
+    #     test_batch_sizes=[4, 4],
+    #     encode_input=False, 
+    #     encode_output=False,
+    # )
 
-    # ------------------------------------- INIT FNO 16x16 MODEL ---------------------------------------
-    fno_model_16, validation_loaders_fno16, test_loaders_fno16, data_processor_fno16 = optional_fno(resolution="low")
-    fno_model_16 = fno_model_16.to(device)
+    # # ------------------------------------- INIT FNO 16x16 MODEL ---------------------------------------
+    # fno_model_16, validation_loaders_fno16, test_loaders_fno16, data_processor_fno16 = optional_fno(resolution="low")
+    # fno_model_16 = fno_model_16.to(device)
 
-    # ------------------------------------- INIT FNO 32x32 MODEL ---------------------------------------
-    fno_model_32, validation_loaders_fno32, test_loaders_fno32, data_processor_fno32 = optional_fno(resolution="medium")
-    fno_model_16 = fno_model_16.to(device)
+    # # ------------------------------------- INIT FNO 32x32 MODEL ---------------------------------------
+    # fno_model_32, validation_loaders_fno32, test_loaders_fno32, data_processor_fno32 = optional_fno(resolution="medium")
+    # fno_model_16 = fno_model_16.to(device)
 
-    # ------------------------------------- INIT FNO 128x128 MODEL ---------------------------------------
-    fno_model_128, validation_loaders_fno128, test_loaders_fno128, data_processor_fno128 = optional_fno(resolution="high")
-    fno_model_128 = fno_model_128.to(device)
+    # # ------------------------------------- INIT FNO 128x128 MODEL ---------------------------------------
+    # fno_model_128, validation_loaders_fno128, test_loaders_fno128, data_processor_fno128 = optional_fno(resolution="high")
+    # fno_model_128 = fno_model_128.to(device)
 
 
 
@@ -144,31 +144,31 @@ if __name__ == "__main__":
 
 # # ================================= RUN COMPARISON =======================================
 
-# # ------------------------------------- CODANO ---------------------------------------
-#     print("<"+"="*50, "Processing CODANO", 50*"="+">")
-#     codanos = []
-#     codano_hyperparams = hyperparameters["Codano"]
-#     for ratio in codano_hyperparams:
-#         codanolowrank_model = CompressedModel(
-#             model=codano_model,
-#             compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio,                                                           
-#                                                            is_compress_conv1d=True,
-#                                                            is_compress_spectral=False),
-#             create_replica=True
-#         )
-#         codanolowrank_model = codanolowrank_model.to(device)
-#         codanos.append(codanolowrank_model)
+# ------------------------------------- CODANO ---------------------------------------
+    print("<"+"="*50, "Processing CODANO", 50*"="+">")
+    codanos = []
+    codano_hyperparams = hyperparameters["Codano"]
+    for ratio in codano_hyperparams:
+        codanolowrank_model = CompressedModel(
+            model=codano_model,
+            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio,                                                           
+                                                           is_compress_conv1d=True,
+                                                           is_compress_spectral=False),
+            create_replica=True
+        )
+        codanolowrank_model = codanolowrank_model.to(device)
+        codanos.append(codanolowrank_model)
 
-#     codano_compare = compare_models_hyperparams(
-#         model1=codano_model,
-#         model2s=codanos,
-#         hyperparameters=codano_hyperparams,
-#         test_loaders=test_loaders_codano,
-#         data_processor=data_processor_codano,
-#         device=device,
-#         track_performance=True
-#     )
-#     results_by_model["Codano"] = codano_compare
+    codano_compare = compare_models_hyperparams(
+        model1=codano_model,
+        model2s=codanos,
+        hyperparameters=codano_hyperparams,
+        test_loaders=test_loaders_codano,
+        data_processor=data_processor_codano,
+        device=device,
+        track_performance=True
+    )
+    results_by_model["Codano"] = codano_compare
 
 #     # ------------------------------------- DeepONet ---------------------------------------
 #     print("<"+"="*50, "Processing DeepONet", 50*"="+">")
@@ -272,6 +272,6 @@ if __name__ == "__main__":
 #     with open("compression/LowRank/results/basic_test_result.pkl", "wb") as f:
 #         pickle.dump(results_by_model, f)
 #     print(results_by_model)
-
+    print(results_by_model)
     # ------------------------------------- Final Evaluation ---------------------------------------
     generate_graph(results_by_model, hyperparameters, "SVD_low_rank", "Rank Ratio", "%", savefile="compression/LowRank/results/basic_result_lowrank_performance.png")

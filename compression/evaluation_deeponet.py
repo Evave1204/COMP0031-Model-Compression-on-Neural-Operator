@@ -6,6 +6,7 @@ from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets.darcy import load_darcy_flow_small_validation_test
 from compression.utils.evaluation_util import evaluate_model, compare_models
+from compression.utils.count_params_util import count_selected_layers
 from compression.quantization.dynamic_quantization import DynamicQuantization
 
 torch.manual_seed(42)
@@ -40,6 +41,10 @@ validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validat
     encode_input=False, 
     encode_output=False,
 )
+param_stats = count_selected_layers(deeponet_model)
+print(deeponet_model)
+for layer_type, count in param_stats.items():
+    print(f"{layer_type}: {count} parameters")
 
 '''
 pruned_model = CompressedModel(

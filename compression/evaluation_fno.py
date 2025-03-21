@@ -7,6 +7,7 @@ from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 
 from compression.utils.evaluation_util import evaluate_model, compare_models, compare_models_hyperparams
+from compression.utils.count_params_util import count_selected_layers
 from compression.utils.fno_util import optional_fno
 #import pandas as pd
 
@@ -16,10 +17,11 @@ torch.cuda.manual_seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-fno_model, validation_loaders, test_loaders, data_processor = optional_fno(resolution="high")
+fno_model, validation_loaders, test_loaders, data_processor = optional_fno(resolution="medium")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 fno_model = fno_model.to(device)
 
+print(fno_model)
 
 # Initialize models 
 # pruned_model = CompressedModel(
@@ -29,7 +31,7 @@ fno_model = fno_model.to(device)
 # )
 # pruned_model = pruned_model.to(device)
 
-# hyperparameters = [0.54,0.55,0.56,0.6]
+# hyperparameters = [0.6]
 # models = []
 # for ratio in hyperparameters:   
 #     lowrank_model = CompressedModel(
@@ -59,12 +61,12 @@ fno_model = fno_model.to(device)
 # )
 # lowrank_model = lowrank_model.to(device)
 
-dynamic_quant_model = CompressedModel(
-    model=fno_model,
-    compression_technique=lambda model: DynamicQuantization(model),
-    create_replica=True
-)
-dynamic_quant_model = dynamic_quant_model.to(device)
+# dynamic_quant_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: DynamicQuantization(model),
+#     create_replica=True
+# )
+# dynamic_quant_model = dynamic_quant_model.to(device)
 
 
 # Start Compression ..
@@ -91,13 +93,13 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 #     track_performance = True
 # )
 
-print("\n"*2)
-print("Quantizing.....")
-results = compare_models(
-    model1=fno_model,
-    model2=dynamic_quant_model,
-    test_loaders=test_loaders,
-    data_processor=data_processor,
-    device=device,
-    track_performance = True
-)
+# print("\n"*2)
+# print("Quantizing.....")
+# results = compare_models(
+#     model1=fno_model,
+#     model2=dynamic_quant_model,
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device,
+#     track_performance = True
+# )

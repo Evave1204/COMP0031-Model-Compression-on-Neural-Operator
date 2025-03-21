@@ -400,7 +400,6 @@ class SVDLowRank:
         """
         self.original_params = sum(p.numel() for p in self.model.parameters())
         for name, module in self.model.named_modules():
-            # Handle Conv1d (kernel_size=1)
             if self.is_compress_conv1d and isinstance(module, nn.Conv1d): #and module.kernel_size == (1,):
                 self.compress_conv1d(module, name)
             elif self.is_compress_FC and isinstance(module, nn.Linear):
@@ -408,6 +407,8 @@ class SVDLowRank:
             # Handle SpectralConv (DenseTensor) 
             elif self.is_compress_spectral and ("SpectralConv" == type(module).__name__):
                 if hasattr(module, "weight"):
+                   # print(1)
+                    #print(module.weight.shape)
                     self.compress_spectral_conv(module, name)
             elif self.is_compress_spectral and ("SpectralConv2dV2" == type(module).__name__):
                 self.compress_foundation_spectral_conv(module,name)

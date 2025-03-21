@@ -85,45 +85,45 @@ if __name__ == "__main__":
     )
 
 
-    # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
-    deeponet_model = DeepONet(
-    train_resolution=128,
-    in_channels=1,
-    out_channels=1, 
-    hidden_channels=64,
-    branch_layers=[256, 256, 256, 256, 128],
-    trunk_layers=[256, 256, 256, 256, 128],
-    positional_embedding='grid',
-    non_linearity='gelu',
-    norm='instance_norm',
-    dropout=0.1
-    )
+    # # ------------------------------------- INIT DEEPONET MODEL ---------------------------------------
+    # deeponet_model = DeepONet(
+    # train_resolution=128,
+    # in_channels=1,
+    # out_channels=1, 
+    # hidden_channels=64,
+    # branch_layers=[256, 256, 256, 256, 128],
+    # trunk_layers=[256, 256, 256, 256, 128],
+    # positional_embedding='grid',
+    # non_linearity='gelu',
+    # norm='instance_norm',
+    # dropout=0.1
+    # )
 
-    deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt", weights_only=False))
-    deeponet_model.eval()
-    deeponet_model = deeponet_model.to(device)
+    # deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt", weights_only=False))
+    # deeponet_model.eval()
+    # deeponet_model = deeponet_model.to(device)
 
-    validation_loaders_deeponet, test_loaders_deeponet, data_processor_deeponet = load_darcy_flow_small_validation_test(
-        n_train=10000,
-        batch_size=16,
-        test_resolutions=[128],
-        n_tests=[1000],
-        test_batch_sizes=[4, 4],
-        encode_input=False, 
-        encode_output=False,
-    )
+    # validation_loaders_deeponet, test_loaders_deeponet, data_processor_deeponet = load_darcy_flow_small_validation_test(
+    #     n_train=10000,
+    #     batch_size=16,
+    #     test_resolutions=[128],
+    #     n_tests=[1000],
+    #     test_batch_sizes=[4, 4],
+    #     encode_input=False, 
+    #     encode_output=False,
+    # )
 
-    # ------------------------------------- INIT FNO 16x16 MODEL ---------------------------------------
-    fno_model_16, validation_loaders_fno16, test_loaders_fno16, data_processor_fno16 = optional_fno(resolution="low")
-    fno_model_16 = fno_model_16.to(device)
+    # # ------------------------------------- INIT FNO 16x16 MODEL ---------------------------------------
+    # fno_model_16, validation_loaders_fno16, test_loaders_fno16, data_processor_fno16 = optional_fno(resolution="low")
+    # fno_model_16 = fno_model_16.to(device)
 
-    # ------------------------------------- INIT FNO 32x32 MODEL ---------------------------------------
-    fno_model_32, validation_loaders_fno32, test_loaders_fno32, data_processor_fno32 = optional_fno(resolution="medium")
-    fno_model_16 = fno_model_16.to(device)
+    # # ------------------------------------- INIT FNO 32x32 MODEL ---------------------------------------
+    # fno_model_32, validation_loaders_fno32, test_loaders_fno32, data_processor_fno32 = optional_fno(resolution="medium")
+    # fno_model_16 = fno_model_16.to(device)
 
-    # ------------------------------------- INIT FNO 128x128 MODEL ---------------------------------------
-    fno_model_128, validation_loaders_fno128, test_loaders_fno128, data_processor_fno128 = optional_fno(resolution="high")
-    fno_model_128 = fno_model_128.to(device)
+    # # ------------------------------------- INIT FNO 128x128 MODEL ---------------------------------------
+    # fno_model_128, validation_loaders_fno128, test_loaders_fno128, data_processor_fno128 = optional_fno(resolution="high")
+    # fno_model_128 = fno_model_128.to(device)
 
 
 
@@ -138,6 +138,10 @@ if __name__ == "__main__":
     results_by_model = {'FNO 16x16': {}, 'FNO 32x32': {}, 'FNO 128x128': {}, 'Codano': {}, 'DeepONet': {}}
 
 # ================================= RUN COMPARISON =======================================
+    # Read
+    with open("compression/LowRank/results/basic_result2.pkl", "rb") as f:
+        results_by_model = pickle.load(f)
+    print(results_by_model)
 
 # ------------------------------------- CODANO ---------------------------------------
     print("<"+"="*50, "Processing CODANO", 50*"="+">")
@@ -165,101 +169,101 @@ if __name__ == "__main__":
     )
     results_by_model["Codano"] = codano_compare
 
-    # ------------------------------------- DeepONet ---------------------------------------
-    print("<"+"="*50, "Processing DeepONet", 50*"="+">")
-    deeponets = []
-    deeponet_hyperparams = hyperparameters["DeepONet"]
-    for ratio in deeponet_hyperparams:
-        deepolowrank_model = CompressedModel(
-            model=deeponet_model,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
-            create_replica=True
-        )
-        deepolowrank_model = deepolowrank_model.to(device)
-        deeponets.append(deepolowrank_model)
+    # # ------------------------------------- DeepONet ---------------------------------------
+    # print("<"+"="*50, "Processing DeepONet", 50*"="+">")
+    # deeponets = []
+    # deeponet_hyperparams = hyperparameters["DeepONet"]
+    # for ratio in deeponet_hyperparams:
+    #     deepolowrank_model = CompressedModel(
+    #         model=deeponet_model,
+    #         compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
+    #         create_replica=True
+    #     )
+    #     deepolowrank_model = deepolowrank_model.to(device)
+    #     deeponets.append(deepolowrank_model)
 
-    deepo_compare = compare_models_hyperparams(
-        model1=deeponet_model,
-        model2s=deeponets,
-        hyperparameters=deeponet_hyperparams,
-        test_loaders=validation_loaders_deeponet,
-        data_processor=data_processor_deeponet,
-        device=device,
-        track_performance = True
-    )
-    results_by_model["DeepONet"] = deepo_compare
+    # deepo_compare = compare_models_hyperparams(
+    #     model1=deeponet_model,
+    #     model2s=deeponets,
+    #     hyperparameters=deeponet_hyperparams,
+    #     test_loaders=validation_loaders_deeponet,
+    #     data_processor=data_processor_deeponet,
+    #     device=device,
+    #     track_performance = True
+    # )
+    # results_by_model["DeepONet"] = deepo_compare
 
-    # ------------------------------------- FNO 16 ---------------------------------------
-    print("<"+"="*50, "Processing FNO 16x16", 50*"="+">")
-    fno_16s = []
-    fno16_hyperparams = hyperparameters["FNO 16x16"]
-    for ratio in fno16_hyperparams:
-        fnolowrank_model_16 = CompressedModel(
-            model=fno_model_16,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
-            create_replica=True
-        )
-        fnolowrank_model_16 = fnolowrank_model_16.to(device)
-        fno_16s.append(fnolowrank_model_16)
+    # # ------------------------------------- FNO 16 ---------------------------------------
+    # print("<"+"="*50, "Processing FNO 16x16", 50*"="+">")
+    # fno_16s = []
+    # fno16_hyperparams = hyperparameters["FNO 16x16"]
+    # for ratio in fno16_hyperparams:
+    #     fnolowrank_model_16 = CompressedModel(
+    #         model=fno_model_16,
+    #         compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
+    #         create_replica=True
+    #     )
+    #     fnolowrank_model_16 = fnolowrank_model_16.to(device)
+    #     fno_16s.append(fnolowrank_model_16)
 
-    fnocompare_16 = compare_models_hyperparams(
-        model1=fno_model_16,
-        model2s=fno_16s,
-        hyperparameters=fno16_hyperparams,
-        test_loaders=validation_loaders_fno16,
-        data_processor=data_processor_fno16,
-        device=device,
-        track_performance=True
-    )
-    results_by_model["FNO 16x16"].update(fnocompare_16)
+    # fnocompare_16 = compare_models_hyperparams(
+    #     model1=fno_model_16,
+    #     model2s=fno_16s,
+    #     hyperparameters=fno16_hyperparams,
+    #     test_loaders=validation_loaders_fno16,
+    #     data_processor=data_processor_fno16,
+    #     device=device,
+    #     track_performance=True
+    # )
+    # results_by_model["FNO 16x16"].update(fnocompare_16)
 
-    # ------------------------------------- FNO 32 ---------------------------------------
-    print("<"+"="*50, "Processing FNO 32x32", 50*"="+">")
-    fno_32s = []
-    fno32_hyperparams = hyperparameters["FNO 32x32"]
-    for ratio in fno32_hyperparams:
-        fnolowrank_model_32 = CompressedModel(
-            model=fno_model_32,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
-            create_replica=True
-        )
-        fnolowrank_model_32 = fnolowrank_model_32.to(device)
-        fno_32s.append(fnolowrank_model_32)
+    # # ------------------------------------- FNO 32 ---------------------------------------
+    # print("<"+"="*50, "Processing FNO 32x32", 50*"="+">")
+    # fno_32s = []
+    # fno32_hyperparams = hyperparameters["FNO 32x32"]
+    # for ratio in fno32_hyperparams:
+    #     fnolowrank_model_32 = CompressedModel(
+    #         model=fno_model_32,
+    #         compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
+    #         create_replica=True
+    #     )
+    #     fnolowrank_model_32 = fnolowrank_model_32.to(device)
+    #     fno_32s.append(fnolowrank_model_32)
 
-    fnocompare_32 = compare_models_hyperparams(
-        model1=fno_model_32,
-        model2s=fno_32s,
-        hyperparameters=fno32_hyperparams,
-        test_loaders=validation_loaders_fno32,
-        data_processor=data_processor_fno32,
-        device=device,
-        track_performance=True
-    )
-    results_by_model["FNO 32x32"] = fnocompare_32
+    # fnocompare_32 = compare_models_hyperparams(
+    #     model1=fno_model_32,
+    #     model2s=fno_32s,
+    #     hyperparameters=fno32_hyperparams,
+    #     test_loaders=validation_loaders_fno32,
+    #     data_processor=data_processor_fno32,
+    #     device=device,
+    #     track_performance=True
+    # )
+    # results_by_model["FNO 32x32"] = fnocompare_32
 
-    # ------------------------------------- FNO 128 ---------------------------------------
-    print("<"+"="*50, "Processing FNO 128x128", 50*"="+">")
-    fno_128s = []
-    fno128_hyperparams = hyperparameters["FNO 128x128"]
-    for ratio in fno128_hyperparams:
-        fnolowrank_model_128 = CompressedModel(
-            model=fno_model_128,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
-            create_replica=True
-        )
-        fnolowrank_model_128 = fnolowrank_model_128.to(device)
-        fno_128s.append(fnolowrank_model_128)
+    # # ------------------------------------- FNO 128 ---------------------------------------
+    # print("<"+"="*50, "Processing FNO 128x128", 50*"="+">")
+    # fno_128s = []
+    # fno128_hyperparams = hyperparameters["FNO 128x128"]
+    # for ratio in fno128_hyperparams:
+    #     fnolowrank_model_128 = CompressedModel(
+    #         model=fno_model_128,
+    #         compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
+    #         create_replica=True
+    #     )
+    #     fnolowrank_model_128 = fnolowrank_model_128.to(device)
+    #     fno_128s.append(fnolowrank_model_128)
 
-    fnocompare_128 = compare_models_hyperparams(
-        model1=fno_model_128,
-        model2s=fno_128s,
-        hyperparameters=fno128_hyperparams,
-        test_loaders=validation_loaders_fno128,
-        data_processor=data_processor_fno128,
-        device=device,
-        track_performance=True
-    )
-    results_by_model["FNO 128x128"] = fnocompare_128
+    # fnocompare_128 = compare_models_hyperparams(
+    #     model1=fno_model_128,
+    #     model2s=fno_128s,
+    #     hyperparameters=fno128_hyperparams,
+    #     test_loaders=validation_loaders_fno128,
+    #     data_processor=data_processor_fno128,
+    #     device=device,
+    #     track_performance=True
+    # )
+    # results_by_model["FNO 128x128"] = fnocompare_128
 
     # ------------------------------------- Results Store ---------------------------------------
     """
@@ -282,10 +286,6 @@ if __name__ == "__main__":
     with open("compression/LowRank/results/basic_result2.pkl", "wb") as f:
         pickle.dump(results_by_model, f)
 
-    # # Read
-    # with open("compression/LowRank/results/basic_result1.pkl", "rb") as f:
-    #     results_by_model = pickle.load(f)
-    # print(results_by_model)
 
     # ------------------------------------- Final Evaluation ---------------------------------------
     generate_graph(results_by_model, hyperparameters, "SVD_low_rank", "Rank Ratio", "%", savefile="compression/LowRank/results/basic_lowrank_performance.png")

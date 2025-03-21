@@ -113,7 +113,7 @@ class SVDLowRank:
 
         total_n_params = weight1.numel() + weight2.numel()
 
-        if (total_n_params > original_weight.numel()):
+        if (total_n_params >= original_weight.numel()):
             self.compressed_layers[name] = layer
         else:
             # create 2 linear layers

@@ -16,7 +16,7 @@ torch.cuda.manual_seed(42)
 torch.backends.cudnn.deterministic = True
 torch.backends.cudnn.benchmark = False
 
-fno_model, validation_loaders, test_loaders, data_processor = optional_fno(resolution="medium")
+fno_model, validation_loaders, test_loaders, data_processor = optional_fno(resolution="high")
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 fno_model = fno_model.to(device)
 
@@ -91,24 +91,13 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 #     track_performance = True
 # )
 
-# print("\n"*2)
-# print("Low Ranking.....")
-# results = compare_models(
-#     model1=fno_model,
-#     model2=lowrank_model,
-#     test_loaders=test_loaders,
-#     data_processor=data_processor,
-#     device=device,
-#     track_performance = True
-# )
-
-
 print("\n"*2)
-print("Dynamic Quantization.....")
-compare_models(
+print("Quantizing.....")
+results = compare_models(
     model1=fno_model,
     model2=dynamic_quant_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
-    device=device
+    device=device,
+    track_performance = True
 )

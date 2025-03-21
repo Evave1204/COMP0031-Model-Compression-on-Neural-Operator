@@ -14,6 +14,8 @@ from neuralop.data_utils.data_utils import get_mesh_displacement
 import torch
 import pickle
 import argparse
+import random
+random.seed(42)
 
 class TestDataset(Dataset):
     def __init__(self, test_data):
@@ -294,19 +296,21 @@ class NsElasticDataset():
                 mu, dt, normalize, train_test_split=train_test_split, sample_per_inlet=sample_per_inlet)
             train_datasets.append(train)
             test_datasets.append(test)
-
         train_dataset = ConcatDataset(train_datasets)
         test_dataset = ConcatDataset(test_datasets)
-
-        print("****Train dataset size***: ", len(train_dataset))
-        print("***Test dataset size***: ", len(test_dataset))
 
         if ntrain is not None:
             train_dataset = random_split(train_dataset, [ntrain, len(train_dataset) - ntrain])[0]
 
         total_test_size = len(test_dataset)
+        test_dataset, _ = random_split(test_dataset, [500, total_test_size-500])
+
+        total_test_size = len(test_dataset)
         val_size = int(total_test_size * val_ratio)
         test_size = total_test_size - val_size
+
+        print("****Train dataset size***: ", len(train_dataset))
+        print("***Test dataset size***: ", len(test_dataset))
 
         val_dataset, test_dataset = random_split(test_dataset, [val_size, test_size])
 

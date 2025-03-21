@@ -431,17 +431,20 @@ class QuantizedSpectralConv(BaseSpectralConv):
         """
         val_min = tensor.min().item()
         val_max = tensor.max().item()
-        scale = (val_max - val_min) / 256.0
+        scale = (val_max - val_min) / 65535.0
+        #scale = (val_max - val_min) / 256.0
         if scale == 0:
             scale = 1.0
-        q_tensor = torch.round((tensor - val_min) / scale - 127).clamp(-127, 127).to(torch.int8)
+        #q_tensor = torch.round((tensor - val_min) / scale - 127).clamp(-127, 127).to(torch.int8)
+        q_tensor = torch.round((tensor - val_min) / scale - 32768).clamp(-32768, 32767).to(torch.int16)
         return q_tensor, scale, val_min
 
     def _dequantize_int8(self, q_tensor: torch.Tensor, scale: float, min_val: float) -> torch.Tensor:
         """
         Dequantize an int8 tensor back to float.
         """
-        return (q_tensor.float() + 127) * scale + min_val
+        #return (q_tensor.float() + 127) * scale + min_val
+        return (q_tensor.float() + 32768) * scale + min_val
 
 
     def forward(

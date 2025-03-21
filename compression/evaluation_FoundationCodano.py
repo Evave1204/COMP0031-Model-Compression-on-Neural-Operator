@@ -38,8 +38,8 @@ if __name__ == "__main__":
     random.seed(params.random_seed)
     np.random.seed(params.random_seed)
     params.config = args.config
+    #stage = StageEnum.PREDICTIVE
     stage = StageEnum.RECONSTRUCTIVE
-    #stage = StageEnum.RECONSTRUCTIVE
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     variable_encoder = None
@@ -61,7 +61,6 @@ if __name__ == "__main__":
     input_mesh = torch.from_numpy(mesh).type(torch.float).cuda()
     codano_model.set_initial_mesh(input_mesh)
 
-    stage = StageEnum.PREDICTIVE
     codano_model.load_state_dict(torch.load(params.model_path), strict=False)
     codano_model = codano_model.cuda().eval()
     print(codano_model)
@@ -117,18 +116,18 @@ if __name__ == "__main__":
     # prune_model = prune_model.to(device)
 
 
-    lowrank_model = CompressedModel(
-        model=codano_model,
-        compression_technique=lambda model: SVDLowRank(model, 
-                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-                                                    min_rank=1,
-                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-                                                    is_compress_conv1d=False,
-                                                    is_compress_FC=True,
-                                                    is_compress_spectral=True),
-        create_replica=True
-    )
-    lowrank_model = lowrank_model.to(device)
+    # lowrank_model = CompressedModel(
+    #     model=codano_model,
+    #     compression_technique=lambda model: SVDLowRank(model, 
+    #                                                 rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+    #                                                 min_rank=1,
+    #                                                 max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+    #                                                 is_compress_conv1d=False,
+    #                                                 is_compress_FC=False,
+    #                                                 is_compress_spectral=True),
+    #     create_replica=True
+    # )
+    # lowrank_model = lowrank_model.to(device)
 
     # # Start compare models
     # print("\n"*2)
@@ -147,7 +146,7 @@ if __name__ == "__main__":
     print("Low Ranking.....")
     compare_models(
         model1=codano_model,
-        model2=lowrank_model,
+        model2=codano_model,
         test_loaders=validation_dataloader,
         data_processor=None,
         device=device,

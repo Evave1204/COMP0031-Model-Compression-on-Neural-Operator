@@ -77,7 +77,7 @@ if __name__ == "__main__":
     random.seed(params.random_seed)
     np.random.seed(params.random_seed)
     params.config = args.config
-    stage = StageEnum.PREDICTIVE
+    stage = StageEnum.RECONSTRUCTIVE
     variable_encoder = None
     token_expander = None
 
@@ -97,7 +97,6 @@ if __name__ == "__main__":
     input_mesh = torch.from_numpy(mesh).type(torch.float).cuda()
     fcodano_model.set_initial_mesh(input_mesh)
 
-    stage = StageEnum.PREDICTIVE
     fcodano_model.load_state_dict(torch.load(params.model_path), strict=False)
     fcodano_model = fcodano_model.cuda().eval()
 
@@ -139,36 +138,40 @@ if __name__ == "__main__":
     # ------------------------------------- INIT INFO ---------------------------------------
     hyperparameters = {
         "Foundation FNO": [0.85, 0.9, 0.95, 0.97, 0.99],
-        "Foundation Codano": [0.85, 0.9, 0.95, 0.97, 0.99] # large
+        "Foundation Codano": [0.75, 0.8, 0.85, 0.9, 0.95] # large
     }
-    results_by_model = {'Foundation FNO': {}, 'Foundation Codano': {}}
+    results_by_model = {'Foundation FNO': {}, 'Foundation Codano': {}, 'Foundation Codano Linear':{}}
 
 # ================================= RUN COMPARISON =======================================
+    # Read
+    with open("compression/LowRank/results/foundation_result1.pkl", "rb") as f:
+        results_by_model = pickle.load(f)
+    print(results_by_model)
 
-    # ------------------------------------- FOUNDATION FNO ---------------------------------------
-    print("<"+"="*50, "Processing Foundation FNO", 50*"="+">")
-    foundation_fnos = []
-    ffno_hyperparams = hyperparameters["Foundation FNO"]
-    for ratio in ffno_hyperparams:
-        ffnolowrank_model = CompressedModel(
-            model=ffno_model,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio, is_compress_FC=False),
-            create_replica=True
-        )
+    # # ------------------------------------- FOUNDATION FNO ---------------------------------------
+    # print("<"+"="*50, "Processing Foundation FNO", 50*"="+">")
+    # foundation_fnos = []
+    # ffno_hyperparams = hyperparameters["Foundation FNO"]
+    # for ratio in ffno_hyperparams:
+    #     ffnolowrank_model = CompressedModel(
+    #         model=ffno_model,
+    #         compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio, is_compress_FC=False),
+    #         create_replica=True
+    #     )
 
-        ffnolowrank_model = ffnolowrank_model.to(device)
-        foundation_fnos.append(ffnolowrank_model)
+    #     ffnolowrank_model = ffnolowrank_model.to(device)
+    #     foundation_fnos.append(ffnolowrank_model)
 
-    ffnocompare = compare_models_hyperparams(
-        model1=ffno_model,
-        model2s=foundation_fnos,
-        hyperparameters = ffno_hyperparams,
-        test_loaders=validation_loaders_ffno,
-        data_processor=None,
-        device=device,
-        track_performance = True
-    )
-    results_by_model["Foundation FNO"] = ffnocompare
+    # ffnocompare = compare_models_hyperparams(
+    #     model1=ffno_model,
+    #     model2s=foundation_fnos,
+    #     hyperparameters = ffno_hyperparams,
+    #     test_loaders=validation_loaders_ffno,
+    #     data_processor=None,
+    #     device=device,
+    #     track_performance = True
+    # )
+    # results_by_model["Foundation FNO"] = ffnocompare
 
     # ------------------------------------- FOUNDATION CODANO ---------------------------------------
     print("<"+"="*50, "Processing Foundation Codano", 50*"="+">")
@@ -177,7 +180,7 @@ if __name__ == "__main__":
     for ratio in fcodano_hyperparams:
         fcodanolowrank_model = CompressedModel(
             model=fcodano_model,
-            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio),
+            compression_technique=lambda model: SVDLowRank(model, rank_ratio=ratio, is_compress_spectral=False, is_compress_conv1d=True),
             create_replica=True
         )
         fcodanolowrank_model = fcodanolowrank_model.to(device)
@@ -193,17 +196,14 @@ if __name__ == "__main__":
         track_performance = True,
         evaluation_params = fcodano_evaluation_params
     )
-    results_by_model["Foundation Codano"] = fcodano_compare
+    results_by_model["Foundation Codano Linear"] = fcodano_compare
 
     # ------------------------------------- Results Store ---------------------------------------
-    with open("compression/LowRank/results/foundation_result.pkl", "wb") as f:
+    with open("compression/LowRank/results/foundation_result1.pkl", "wb") as f:
         pickle.dump(results_by_model, f)
 
-    # # Read
-    # with open("compression/LowRank/results/result.pkl", "rb") as f:
-    #     results_by_model = pickle.load(f)
+
+    # # ------------------------------------- Final Evaluation ---------------------------------------
     # print(results_by_model)
-    # ------------------------------------- Final Evaluation ---------------------------------------\
-    print(results_by_model)
 
     generate_graph(results_by_model, hyperparameters, "SVD_low_rank", "Rank Ratio", "%", savefile="compression/LowRank/results/foundation_lowrank_performance.png")

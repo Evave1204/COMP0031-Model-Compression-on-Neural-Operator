@@ -18,7 +18,8 @@ from ruamel.yaml.scalarint import ScalarInt
 from ruamel.yaml.scalarfloat import ScalarFloat
 
 # --- Adjust sys.path so that the repository root is found ---
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
+repo_root = os.path.abspath(os.path.join(
+    os.path.dirname(__file__), '../../../'))
 
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
@@ -27,13 +28,17 @@ if repo_root not in sys.path:
 def load_fno_config(config_path="config/darcy_config.yaml"):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
-    # Expecting keys: n_modes, in_channels, out_channels, hidden_channels.
     return (
         config.get("n_modes", (16, 16)),
         config.get("in_channels", 1),
         config.get("out_channels", 1),
         config.get("hidden_channels", 32)
     )
+
+def load_codano_config(config_path="config/darcy_config_codano.yaml"):
+    with open(config_path, "r") as f:
+        config = yaml.safe_load(f)
+    return config["default"]["codano"]
 
 # --- Load the Darcy dataset ---
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
@@ -62,7 +67,7 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
             separable=False, dropout=0.0, rank=1.0
         )
     elif ModelClass.__name__ == "DeepONet":
-        # DeepONet-specific parameters (from your code)
+        # DeepONet-specific parameters (using values from your discussion)
         train_resolution = 128
         in_channels = 1
         out_channels = 1
@@ -70,13 +75,38 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
         branch_layers = [256, 256, 256, 256, 128]
         trunk_layers = [256, 256, 256, 256, 128]
         base_model = ModelClass(train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers)
+    elif ModelClass.__name__ == "CODANO":
+        codano_params = load_codano_config()
+        base_model = ModelClass(
+            in_channels=codano_params.get("data_channels", 1),
+            output_variable_codimension=codano_params.get("output_variable_codimension", 1),
+            hidden_variable_codimension=codano_params.get("hidden_variable_codimension", 2),
+            lifting_channels=codano_params.get("lifting_channels", 4),
+            use_positional_encoding=codano_params.get("use_positional_encoding", False),
+            positional_encoding_dim=codano_params.get("positional_encoding_dim", 1),
+            positional_encoding_modes=codano_params.get("positional_encoding_modes", [8, 8]),
+            static_channel_dim=codano_params.get("static_channel_dim", 0),
+            variable_ids=codano_params.get("variable_ids", ["a1"]),
+            n_layers=codano_params.get("n_layers", 5),
+            n_heads=codano_params.get("n_heads", [2,2,2,2,2]),
+            n_modes=codano_params.get("n_modes", [[8,8]]*5),
+            attention_scaling_factors=codano_params.get("attention_scaling_factors", [0.5]*5),
+            per_layer_scaling_factors=codano_params.get("per_layer_scaling_factors", [[1,1],[0.5,0.5],[1,1],[2,2],[1,1]]),
+            enable_cls_token=codano_params.get("enable_cls_token", False),
+        )
     else:
         base_model = ModelClass()
 
     # Load the model weights safely.
     with torch.serialization.safe_globals([ScalarInt, ScalarFloat]):
         state_dict = torch.load(weight_path, map_location=device, weights_only=False)
-    base_model.load_state_dict(state_dict, strict=False)
+    try:
+        base_model.load_state_dict(state_dict, strict=False)
+    except RuntimeError as e:
+        error_message = f"Regular layer pruning failed for {ModelClass.__name__}: {e}"
+        print(f"Error loading state_dict for {ModelClass.__name__}: {e}")
+        results = {"error": error_message}
+        return base_model, None, results
     base_model = base_model.to(device)
     base_model.eval()
 
@@ -102,30 +132,7 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
         device=device,
         verbose=False
     )
-
     return base_model, pruned_model, results
-
-# --- Updated load_and_prune_model functionfor GINO AND CODANO ---
-    # Instantiate the model with training parameters.
-    # elif ModelClass.__name__ == "GINO": # ENABLE WHEN NEEDED
-    #     # Use parameters from gino_carcfd_config.yaml (adjust as necessary)
-    #     n_modes = (16, 16, 16)
-    #     in_channels = 1
-    #     out_channels = 1
-    #     hidden_channels = 64
-    #     base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
-    # elif ModelClass.__name__ == "CODANO": # ENABLE WHEN NEEDED
-    #     # Use parameters from darcy_config_codano.yaml
-    #     in_channels = 1
-    #     output_variable_codimension = 1
-    #     hidden_variable_codimension = 2
-    #     lifting_channels = 4
-    #     base_model = ModelClass(
-    #         in_channels=in_channels,
-    #         output_variable_codimension=output_variable_codimension,
-    #         hidden_variable_codimension=hidden_variable_codimension,
-    #         lifting_channels=lifting_channels
-    #     )
 
 
 def main():
@@ -133,16 +140,15 @@ def main():
     technique = "layer"  # Choose "layer" or "magnitude"
 
     # --- Section 1: Eval all models ---
-    fno_weight_path = "models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt"
-    deeponet_weight_path = "models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt"
-    # gino_weight_path = "models/model-gino-carcfd-32-resolution-2025-03-04-20-01.pt"
+    # fno_weight_path = "models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt"
+    # deeponet_weight_path = "models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt"
+    codano_weight_path = "models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt"
     # codano_weight_path = "models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt"
-    
+
     models_info = {
-        "FNO": {"class": FNO, "weight": fno_weight_path},
-        "DeepONet": {"class": DeepONet, "weight": deeponet_weight_path},
-        # "GINO": {"class": GINO, "weight": gino_weight_path},
-        # "Codano": {"class": CODANO, "weight": codano_weight_path},
+        # "FNO": {"class": FNO, "weight": fno_weight_path},
+        # "DeepONet": {"class": DeepONet, "weight": deeponet_weight_path},
+        "Codano": {"class": CODANO, "weight": codano_weight_path},
     }
 
     results_section1 = {}
@@ -163,8 +169,9 @@ def main():
 
     # --- Section 2: Compare 'Our' vs 'Their' weights for FNO and Codano ---
     # For demonstration, if separate files are not available, use the same file.
-    our_fno_weight = fno_weight_path  # Replace with separate path if available.
-    their_fno_weight = fno_weight_path  # Replace with separate path if available.
+    # Replace with separate path if available.
+    # our_fno_weight = fno_weight_path
+    # their_fno_weight = fno_weight_path
     # our_codano_weight = codano_weight_path  # Replace with separate path if available.
     # their_codano_weight = codano_weight_path  # Replace with separate path if available.
 
@@ -200,6 +207,7 @@ def main():
     print(results_section1)
     # print("\nSection 2 Results:")
     # print(results_section2)
+
 
 if __name__ == "__main__":
     main()

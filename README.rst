@@ -1,204 +1,77 @@
-====================================
-Model Compression on Neural Operator
-====================================
+===========================================
+Model Compression on Neural Operators
+===========================================
 
-How to start work in convenience
---------------------------------
-1. Set the python path (for lab machine, and run it each time you reconnect lab machine)
+Introduction
+----------------
+This repository contains the implementation for our paper on compressing neural operators to enhance their efficiency without compromising performance. Neural operators are designed to learn mappings between function spaces and have shown significant benefits in terms of accuracy and generalization. However, scaling these models introduces considerable deployment challenges, including increased latency and substantial computational resource demands.
+
+Our work presents the first comprehensive study on compressing neural operators, demonstrating that post-training compression is not only feasible but yields substantial efficiency gains.
+
+Methodology
+----------------
+We systematically investigate multiple compression techniques:
+
+1. **Magnitude-based weight pruning**: Removing less important weights based on their absolute values
+2. **Low-rank matrix factorization**: Decomposing weight matrices into lower-rank approximations
+3. **Layer pruning**: Removing entire layers while maintaining overall network functionality
+4. **Static quantization**: Converting model weights to lower precision formats
+5. **Dynamic quantization**: Runtime conversion of activations to lower precision
+
+Through extensive experimentation on various neural operators, including CoDAno and Fourier Neural Operator (FNO), we demonstrate significant efficiency improvements with minimal accuracy loss.
+
+Usage Instructions
+------------------
+Follow these steps to get started with the codebase:
+
+1. Set the python path (for lab machine, run it each time you reconnect)
+   
 .. code ::
+
    setenv PYTHONPATH `pwd`
+
 2. Download dataset
+   
 .. code ::
+
    python compression/dataset_download.py
    python compression/wandb_download/dataset_download.py
+
 3. Download models
-.. code ::
-   python compression/wandb_download/weights_download.py
-4. Evaluation Example (on docano)
-.. code :: 
-   python compression/evaluation_docano.py
-.. .. image:: https://img.shields.io/pypi/v/neuraloperator
-..    :target: https://pypi.org/project/neuraloperator/
-..    :alt: PyPI
-
-.. .. image:: https://github.com/NeuralOperator/neuraloperator/actions/workflows/test.yml/badge.svg
-..    :target: https://github.com/NeuralOperator/neuraloperator/actions/workflows/test.yml
-
-
-.. ===============================================
-.. NeuralOperator: Learning in Infinite Dimensions
-.. ===============================================
-
-.. ``neuraloperator`` is a comprehensive library for 
-.. learning neural operators in PyTorch.
-.. It is the official implementation for Fourier Neural Operators 
-.. and Tensorized Neural Operators.
-
-.. Unlike regular neural networks, neural operators
-.. enable learning mapping between function spaces, and this library
-.. provides all of the tools to do so on your own data.
-
-.. Neural operators are also resolution invariant, 
-.. so your trained operator can be applied on data of any resolution.
-
-
-.. Installation
-.. ------------
-
-.. Just clone the repository and install locally (in editable mode so changes in the code are 
-.. immediately reflected without having to reinstall):
-
-.. code::
-
-..   git clone https://github.com/NeuralOperator/neuraloperator
-..   cd neuraloperator
-..   pip install -e .
-..   pip install -r requirements.txt
-
-.. You can also just pip install the most recent stable release of the library 
-.. on `PyPI <https://pypi.org/project/neuraloperator/>`_:
-
-
-.. .. code::
-  
-..   pip install neuraloperator
-
-.. Quickstart
-.. ----------
-
-.. After you've installed the library, you can start training operators seamlessly:
-
-
-.. .. code-block:: python
-
-..    from neuralop.models import FNO
-
-..    operator = FNO(n_modes=(16, 16), hidden_channels=64,
-..                    in_channels=3, out_channels=1)
-
-.. Tensorization is also provided out of the box: you can improve the previous models
-.. by simply using a Tucker Tensorized FNO with just a few parameters:
-
-.. .. code-block:: python
-
-..    from neuralop.models import TFNO
-
-..    operator = TFNO(n_modes=(16, 16), hidden_channels=64,
-..                    in_channels=3, 
-..                    out_channels=1,
-..                    factorization='tucker',
-..                    implementation='factorized',
-..                    rank=0.05)
-
-.. This will use a Tucker factorization of the weights. The forward pass
-.. will be efficient by contracting directly the inputs with the factors
-.. of the decomposition. The Fourier layers will have 5% of the parameters
-.. of an equivalent, dense Fourier Neural Operator!
-
-.. Checkout the `documentation <https://neuraloperator.github.io/dev/index.html>`_ for more!
-
-.. Using with weights and biases
-.. -----------------------------
-
-.. Create a file in ``neuraloperator/config`` called ``wandb_api_key.txt`` and paste your Weights and Biases API key there.
-.. You can configure the project you want to use and your username in the main yaml configuration files.
-
-.. ===============
-.. Contributing
-.. ===============
-
-.. NeuralOperator is 100% open-source, and we welcome all contributions from the community! 
-.. If you spot a bug or a typo in the documentation, or have an idea for a feature you'd like to see,
-.. please report it on our `issue tracker <https://github.com/neuraloperator/neuraloperator/issues>`_, 
-.. or even better, open a Pull-Request on `GitHub <https://github.com/neuraloperator/neuraloperator>`_. 
-
-.. NeuralOperator has additional dependencies for development, which can be found in ``requirements_dev.txt``:
-
-.. .. code::
    
-..    pip install -r requirements_dev.txt
+.. code ::
 
-.. Code formatting
-.. ----------------
+   python compression/wandb_download/weights_download.py
 
-.. Before you submit your changes, you should make sure your code adheres to our style-guide. The
-.. easiest way to do this is with ``black``:
+4. Evaluation Example (on CoDAno)
+   
+.. code :: 
 
-.. .. code::
+   python compression/evaluation_docano.py
 
-..    black .
+Compression Examples
+-------------------
 
-.. Running the tests
-.. ------------------
+Try different compression techniques:
 
-.. Testing and documentation are an essential part of this package and all
-.. functions come with unit-tests and documentation. The tests are run using the
-.. pytest package. 
-    
-.. To run the tests, simply run, in the terminal:
+.. code ::
 
-.. .. code::
+   # Magnitude-based pruning
+   python compression/prune_model.py --model_type fno --sparsity 0.5
+   
+   # Low-rank factorization
+   python compression/factorize_model.py --model_type codano --rank_ratio 0.1
+   
+   # Quantization
+   python compression/quantize_model.py --model_type fno --precision int8
 
-..     pytest -v neuralop
+Key Results
+-------------
+Our experiments demonstrate that:
 
-.. Building documentation
-.. -----------------------
-.. The HTML for our documentation website is built using ``sphinx``. The documentation
-.. is built from inside the ``doc`` folder. 
+- Neural operators can be compressed with minimal performance degradation
+- Compression benefits become more pronounced with larger model scales
+- Different compression techniques offer varying tradeoffs between computation time, memory usage, and accuracy
+- Post-training compression provides a flexible approach to optimizing neural operators for resource-constrained environments
 
-.. .. code::
-
-..    cd doc
-..    make html
-
-.. This will build the docs in ``./doc/build/html``.
-
-.. Note that the documentation requires other dependencies installable from ``./doc/requirements_doc.txt``. 
-
-.. To view the documentation locally, run:
-
-.. .. code::
-
-..    cd doc/build/html
-..    python -m http.server [PORT_NUM]
-
-.. The docs will then be viewable at ``localhost:PORT_NUM``.
-
-    
-.. Citing
-.. ------
-
-.. If you use NeuralOperator in an academic paper, please cite [1]_, [2]_::
-
-..    @misc{kossaifi2024neural,
-..       title={A Library for Learning Neural Operators}, 
-..       author={Jean Kossaifi and Nikola Kovachki and 
-..       Zongyi Li and Davit Pitt and 
-..       Miguel Liu-Schiaffini and Robert Joseph George and 
-..       Boris Bonev and Kamyar Azizzadenesheli and 
-..       Julius Berner and Anima Anandkumar},
-..       year={2024},
-..       eprint={2412.10354},
-..       archivePrefix={arXiv},
-..       primaryClass={cs.LG}
-..    }
-
-..    @article{kovachki2021neural,
-..       author    = {Nikola B. Kovachki and
-..                      Zongyi Li and
-..                      Burigede Liu and
-..                      Kamyar Azizzadenesheli and
-..                      Kaushik Bhattacharya and
-..                      Andrew M. Stuart and
-..                      Anima Anandkumar},
-..       title     = {Neural Operator: Learning Maps Between Function Spaces},
-..       journal   = {CoRR},
-..       volume    = {abs/2108.08481},
-..       year      = {2021},
-..    }
-
-
-.. .. [1] Kossaifi, J., Kovachki, N., Li, Z., Pitt, D., Liu-Schiaffini, M., George, R., Bonev, B., Azizzadenesheli, K., Berner, J., and Anandkumar, A., "A Library for Learning Neural Operators", ArXiV, 2024. doi:10.48550/arXiv.2412.10354.
-
-
-.. .. [2] Kovachki, N., Li, Z., Liu, B., Azizzadenesheli, K., Bhattacharya, K., Stuart, A., and Anandkumar A., “Neural Operator: Learning Maps Between Function Spaces”, JMLR, 2021. doi:10.48550/arXiv.2108.08481.
+The released code and datasets enable further research and facilitate the practical integration of efficient neural operators into computational workflows across diverse domains and deployment scenarios.

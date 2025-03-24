@@ -24,6 +24,9 @@ repo_root = os.path.abspath(os.path.join(
 if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
+def count_parameters(model): 
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
 # --- FNO configuration loader ---
 def load_fno_config(config_path="config/darcy_config.yaml"):
     with open(config_path, "r") as f:
@@ -53,60 +56,59 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
 
 def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, device, prune_ratio=0.2, technique="layer"):
     # Instantiate the model with training parameters.
-    if ModelClass.__name__ == "FNO":
-        # FNO-specific parameters (from your code)
-        n_modes = (32, 32)
-        in_channels = 1
-        out_channels = 1
-        hidden_channels = 64
-        n_layers = 5
-        base_model = ModelClass(
-            n_modes, in_channels, out_channels, hidden_channels,
-            n_layers=n_layers, skip="linear", norm="group_norm",
-            implementation="factorized", projection_channel_ratio=2,
-            separable=False, dropout=0.0, rank=1.0
-        )
-    elif ModelClass.__name__ == "DeepONet":
-        # DeepONet-specific parameters (using values from your discussion)
-        train_resolution = 128
-        in_channels = 1
-        out_channels = 1
-        hidden_channels = 64
-        branch_layers = [256, 256, 256, 256, 128]
-        trunk_layers = [256, 256, 256, 256, 128]
-        base_model = ModelClass(train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers)
-    elif ModelClass.__name__ == "CODANO":
-        codano_params = load_codano_config()
-        base_model = ModelClass(
-            in_channels=codano_params.get("data_channels", 1),
-            output_variable_codimension=codano_params.get("output_variable_codimension", 1),
-            hidden_variable_codimension=codano_params.get("hidden_variable_codimension", 2),
-            lifting_channels=codano_params.get("lifting_channels", 4),
-            use_positional_encoding=codano_params.get("use_positional_encoding", False),
-            positional_encoding_dim=codano_params.get("positional_encoding_dim", 1),
-            positional_encoding_modes=codano_params.get("positional_encoding_modes", [8, 8]),
-            static_channel_dim=codano_params.get("static_channel_dim", 0),
-            variable_ids=codano_params.get("variable_ids", ["a1"]),
-            n_layers=codano_params.get("n_layers", 5),
-            n_heads=codano_params.get("n_heads", [2,2,2,2,2]),
-            n_modes=codano_params.get("n_modes", [[8,8]]*5),
-            attention_scaling_factors=codano_params.get("attention_scaling_factors", [0.5]*5),
-            per_layer_scaling_factors=codano_params.get("per_layer_scaling_factors", [[1,1],[0.5,0.5],[1,1],[2,2],[1,1]]),
-            enable_cls_token=codano_params.get("enable_cls_token", False),
-        )
-    else:
-        base_model = ModelClass()
+    try:
+        if ModelClass.__name__ == "FNO":
+            # Use FNO-specific parameters from the FNO config.
+            n_modes, in_channels, out_channels, hidden_channels = load_fno_config("config/darcy_config.yaml")
+            n_layers = 5  # as specified in the config
+            base_model = ModelClass(
+                n_modes, in_channels, out_channels, hidden_channels,
+                n_layers=n_layers, skip="linear", norm="group_norm",
+                implementation="factorized", projection_channel_ratio=2,
+                separable=False, dropout=0.0, rank=1.0
+            )
+        elif ModelClass.__name__ == "DeepONet":
+            # DeepONet-specific parameters.
+            train_resolution = 128
+            in_channels = 1
+            out_channels = 1
+            hidden_channels = 64
+            branch_layers = [256, 256, 256, 256, 128]
+            trunk_layers = [256, 256, 256, 256, 128]
+            base_model = ModelClass(train_resolution, in_channels, out_channels, hidden_channels, branch_layers, trunk_layers)
+        elif ModelClass.__name__ == "CODANO":
+            # Use parameters from darcy_config_codano.yaml (hardcoded for now)
+            base_model = ModelClass(
+                in_channels=1,
+                output_variable_codimension=1,
+                hidden_variable_codimension=2,
+                lifting_channels=4,
+                use_positional_encoding=False,
+                positional_encoding_dim=1,
+                positional_encoding_modes=[8, 8],
+                static_channel_dim=0,
+                variable_ids=["a1"],
+                n_layers=5,
+                n_heads=[2,2,2,2,2],
+                n_modes=[[8,8]]*5,
+                attention_scaling_factors=[0.5,0.5,0.5,0.5,0.5],
+                per_layer_scaling_factors=[[1,1],[0.5,0.5],[1,1],[2,2],[1,1]],
+                enable_cls_token=False,
+            )
+        else:
+            base_model = ModelClass()
+    except Exception as e:
+        return None, None, {"error": f"Model instantiation failed for {ModelClass.__name__}: {e}"}
 
     # Load the model weights safely.
-    with torch.serialization.safe_globals([ScalarInt, ScalarFloat]):
-        state_dict = torch.load(weight_path, map_location=device, weights_only=False)
     try:
+        with torch.serialization.safe_globals([ScalarInt, ScalarFloat]):
+            state_dict = torch.load(weight_path, map_location=device, weights_only=False)
         base_model.load_state_dict(state_dict, strict=False)
-    except RuntimeError as e:
-        error_message = f"Regular layer pruning failed for {ModelClass.__name__}: {e}"
-        print(f"Error loading state_dict for {ModelClass.__name__}: {e}")
-        results = {"error": error_message}
-        return base_model, None, results
+    except Exception as e:
+        # Record that state_dict loading failed due to mismatch.
+        return base_model, None, {"error": f"Regular layer pruning failed for {ModelClass.__name__}: {e}"}
+
     base_model = base_model.to(device)
     base_model.eval()
 
@@ -114,24 +116,31 @@ def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, 
     pruned_model = copy.deepcopy(base_model)
 
     # Apply the selected pruning technique.
-    if technique == "layer":
-        pruner = GlobalLayerPruning(pruned_model)
-        pruner.layer_prune(prune_ratio=prune_ratio)
-    elif technique == "magnitude":
-        pruner = GlobalMagnitudePruning(pruned_model, prune_ratio=prune_ratio)
-        pruner.prune()
-    else:
-        raise ValueError("Unknown compression technique: choose 'layer' or 'magnitude'")
+    try:
+        if technique == "layer":
+            pruner = GlobalLayerPruning(pruned_model)
+            pruner.layer_prune(prune_ratio=prune_ratio)
+        elif technique == "magnitude":
+            pruner = GlobalMagnitudePruning(pruned_model, prune_ratio=prune_ratio)
+            pruner.prune()
+        else:
+            raise ValueError("Unknown compression technique: choose 'layer' or 'magnitude'")
+    except Exception as e:
+        return base_model, pruned_model, {"error": f"Pruning failed for {ModelClass.__name__}: {e}"}
 
     # Evaluate using the real evaluation routine.
-    results = compare_models(
-        model1=base_model,
-        model2=pruned_model,
-        test_loaders=test_loaders,
-        data_processor=data_processor,
-        device=device,
-        verbose=False
-    )
+    try:
+        results = compare_models(
+            model1=base_model,
+            model2=pruned_model,
+            test_loaders=test_loaders,
+            data_processor=data_processor,
+            device=device,
+            verbose=False
+        )
+    except Exception as e:
+        return base_model, pruned_model, {"error": f"Evaluation failed for {ModelClass.__name__}: {e}"}
+
     return base_model, pruned_model, results
 
 
@@ -140,14 +149,14 @@ def main():
     technique = "layer"  # Choose "layer" or "magnitude"
 
     # --- Section 1: Eval all models ---
-    # fno_weight_path = "models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt"
-    # deeponet_weight_path = "models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt"
+    fno_weight_path = "models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt"
+    deeponet_weight_path = "models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt"
     codano_weight_path = "models/model-codano-darcy-16-resolution-2025-03-15-19-31.pt"
     # codano_weight_path = "models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt"
 
     models_info = {
-        # "FNO": {"class": FNO, "weight": fno_weight_path},
-        # "DeepONet": {"class": DeepONet, "weight": deeponet_weight_path},
+        "FNO": {"class": FNO, "weight": fno_weight_path},
+        "DeepONet": {"class": DeepONet, "weight": deeponet_weight_path},
         "Codano": {"class": CODANO, "weight": codano_weight_path},
     }
 

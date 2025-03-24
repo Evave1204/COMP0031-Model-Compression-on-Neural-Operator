@@ -530,9 +530,6 @@ def compare_models_hyperparams(model1, model2s, hyperparameters, test_loaders, d
                 results["Comparison"][hyperparameter]["flops_reduction"] = flops_reduction
                 print(f"{resolution}x{resolution} - FLOPs Reduction: {flops_reduction:.2f}%")
             
-                    results["Comparison"]["flops_reduction"] = flops_reduction
-                    print(f"{resolution}x{resolution} - FLOPs Reduction: {flops_reduction:.2f}%")
-            
     
     return results
 

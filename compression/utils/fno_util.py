@@ -60,9 +60,9 @@ def optional_fno(resolution):
             in_channels=1,
             out_channels=1,
             n_modes=(16, 16),
-            hidden_channels=16,
+            hidden_channels=32,
             projection_channel_ratio=2,
-            n_layers=5,
+            n_layers=4,
             skip="linear",
             norm="group_norm",
             implementation="factorized",
@@ -72,51 +72,18 @@ def optional_fno(resolution):
             domain_padding=None,
             stabilizer=None,
             dropout=0.0)
-        
-        fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-17-18-57.pt", weights_only=False))
+        fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-02-05-19-55.pt", weights_only=False))
         fno_model.eval()    
-        validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
+        train_loader, test_loaders, data_processor = load_darcy_flow_small_validation_test(
             n_train=1000,
             batch_size=16,
-            test_resolutions=[16],
-            n_tests=[10000],
-            test_batch_sizes=[16],
+            test_resolutions=[16, 32],
+            n_tests=[100, 50],
+            test_batch_sizes=[16, 16],
             encode_input=False, 
             encode_output=False,
         )
-        return fno_model, validation_loaders, test_loaders, data_processor
-    
-    elif resolution == "medium":
-        fno_model = FNO(
-        in_channels=1,
-        out_channels=1,
-        n_modes=(32, 32),
-        hidden_channels=32,
-        projection_channel_ratio=2,
-        n_layers=5,
-        skip="linear",
-        norm="group_norm",
-        implementation="factorized",
-        separable=False,
-        factorization=None,
-        rank=1.0,
-        domain_padding=None,
-        stabilizer=None,
-        dropout=0.0)
-
-        fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-17-19-02.pt", weights_only=False))
-        fno_model.eval()
-
-        validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
-            n_train=100,
-            batch_size=16,
-            test_resolutions=[32],
-            n_tests=[10000],
-            test_batch_sizes=[16],
-            encode_input=True, 
-            encode_output=False,
-        )
-        return fno_model, validation_loaders, test_loaders, data_processor
+        return fno_model, train_loader, test_loaders, data_processor
     
     elif resolution == "high":
         fno_model = FNO(
@@ -139,13 +106,13 @@ def optional_fno(resolution):
         fno_model.load_state_dict(torch.load("models/model-fno-darcy-16-resolution-2025-03-04-18-48.pt", weights_only=False))
         fno_model.eval()
 
-        validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
-            n_train=10000,
+        train_loader, test_loaders, data_processor = load_darcy_flow_small_validation_test(
+            n_train=100,
             batch_size=16,
             test_resolutions=[128],
-            n_tests=[1000],
-            test_batch_sizes=[16],
+            n_tests=[10000],
+            test_batch_sizes=[1],
             encode_input=True, 
-            encode_output=False,
+            encode_output=True,
         )
-        return fno_model, validation_loaders, test_loaders, data_processor
+        return fno_model, train_loader, test_loaders, data_processor

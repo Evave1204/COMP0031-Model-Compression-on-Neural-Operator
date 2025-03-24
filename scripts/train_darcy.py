@@ -1,162 +1,227 @@
 import sys
-import os
+
+from configmypy import ConfigPipeline, YamlConfig, ArgparseConfig
 import torch
-import torch.nn as nn
-import yaml
-import copy
 
-# --- Adjust sys.path so that the repository root is found ---
-repo_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '../../../'))
-if repo_root not in sys.path:
-    sys.path.insert(0, repo_root)
+from torch.utils.data import DataLoader, DistributedSampler
+import wandb
 
-# --- Import our pruning modules ---
-from compression.layer_pruning.layer_pruning import GlobalLayerPruning
-from compression.magnitude_pruning.global_pruning import GlobalMagnitudePruning
-# Import the real evaluation routines from utils.py:
-from compression.utils import compare_models
+from neuralop import H1Loss, LpLoss, Trainer, get_model
+from neuralop.data.datasets import load_darcy_flow_small
+from neuralop.data.transforms.data_processors import MGPatchingDataProcessor
+from neuralop.training import setup, AdamW
+from neuralop.mpu.comm import get_local_rank
+from neuralop.utils import get_wandb_api_key, count_model_params
 
-# --- Import the actual models ---
-from neuralop.models.fno import FNO
-from neuralop.models.deeponet import DeepONet
-from neuralop.models.gino import GINO
-from neuralop.models.codano import CODANO
 
-# --- Import the Darcy data loader (correct version) ---
-from neuralop.data.datasets.darcy import load_darcy_flow_small
+# Read the configuration
+config_name = "default"
+pipe = ConfigPipeline(
+    [
+        YamlConfig(
+            "./darcy_config.yaml", config_name="default", config_folder="./config"
+        ),
+        ArgparseConfig(infer_types=True, config_name=None, config_file=None),
+        YamlConfig(config_folder="../config"),
+    ]
+)
+config = pipe.read_conf()
+config_name = pipe.steps[-1].config_name
 
-# --- FNO configuration loader (assumes keys in your YAML file) ---
-def load_fno_config(config_path="config/darcy_config.yaml"):
-    with open(config_path, "r") as f:
-        config = yaml.safe_load(f)
-    return (
-        config.get("n_modes", (16, 16)),
-        config.get("in_channels", 1),
-        config.get("out_channels", 1),
-        config.get("hidden_channels", 32)
+# Set-up distributed communication, if using
+device, is_logger = setup(config)
+
+# Set up WandB logging
+wandb_args = None
+if config.wandb.log and is_logger:
+    wandb.login(key=get_wandb_api_key())
+    
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M')
+    
+    if config.wandb.name:
+        wandb_name = f"{config.wandb.name}-{timestamp}"
+    else:
+        wandb_name = "_".join(
+            f"{var}"
+            for var in [
+                config_name,
+                config.fno.n_layers,
+                config.fno.hidden_channels,
+                config.fno.n_modes_width,
+                config.fno.n_modes[0],
+                config.fno.factorization,
+                config.fno.rank,
+                config.patching.levels,
+                config.patching.padding,
+                timestamp
+            ]
+        )
+    wandb_args =  dict(
+        config=config,
+        name=wandb_name,
+        group=config.wandb.group,
+        project=config.wandb.project,
+        entity=config.wandb.entity,
     )
+    if config.wandb.sweep:
+        for key in wandb.config.keys():
+            config.params[key] = wandb.config[key]
+    wandb.init(**wandb_args)
 
-# --- Load the Darcy dataset ---
+# Make sure we only print information when needed
+config.verbose = config.verbose and is_logger
+
+# Print config to screen
+if config.verbose and is_logger:
+    pipe.log()
+    sys.stdout.flush()
+
+# Loading the Darcy flow dataset
 train_loader, test_loaders, data_processor = load_darcy_flow_small(
-    n_train=1000,
-    batch_size=16,
-    test_resolutions=[16, 32],
-    n_tests=[100, 50],
-    test_batch_sizes=[16, 16],
-    encode_input=False, 
+    n_train=config.data.n_train,
+    batch_size=config.data.batch_size,
+    test_resolutions=config.data.test_resolutions,
+    n_tests=config.data.n_tests,
+    test_batch_sizes=config.data.test_batch_sizes,
+    encode_input=False,
     encode_output=False,
 )
+model = get_model(config)
 
-# --- Updated load_and_prune_model using compare_models from utils.py ---
-def load_and_prune_model(ModelClass, weight_path, test_loaders, data_processor, device, prune_ratio=0.2, technique="layer"):
-    """
-    Loads a model from weight_path, creates a deep copy for pruning,
-    applies the selected pruning technique (either "layer" or "magnitude"),
-    and then evaluates both versions using compare_models.
-    """
-    # Handle FNO instantiation (which requires additional parameters)
-    if ModelClass.__name__ == "FNO":
-        n_modes, in_channels, out_channels, hidden_channels = load_fno_config()
-        base_model = ModelClass(n_modes, in_channels, out_channels, hidden_channels)
-    else:
-        base_model = ModelClass()
-    
-    # Load model weights onto the base model.
-    base_model.load_state_dict(torch.load(weight_path, map_location=device))
-    base_model = base_model.to(device)
-    base_model.eval()
-    
-    # Create a deep copy to apply pruning on.
-    pruned_model = copy.deepcopy(base_model)
-    
-    # Apply the chosen pruning technique.
-    if technique == "layer":
-        pruner = GlobalLayerPruning(pruned_model)
-        pruner.layer_prune(prune_ratio=prune_ratio)
-    elif technique == "magnitude":
-        pruner = GlobalMagnitudePruning(pruned_model, prune_ratio=prune_ratio)
-        pruner.prune()  # Adjust if the API differs.
-    else:
-        raise ValueError("Unknown compression technique: choose 'layer' or 'magnitude'")
-    
-    # Use the real evaluation routine to compare models.
-    results = compare_models(
-        model1=base_model,
-        model2=pruned_model,
-        test_loaders=test_loaders,
-        data_processor=data_processor,
-        device=device,
-        verbose=True,
-        track_performance=True
-    )
-    
-    return base_model, pruned_model, results
+# convert dataprocessor to an MGPatchingDataprocessor if patching levels > 0
+if config.patching.levels > 0:
+    data_processor = MGPatchingDataProcessor(model=model,
+                                             in_normalizer=data_processor.in_normalizer,
+                                             out_normalizer=data_processor.out_normalizer,
+                                             padding_fraction=config.patching.padding,
+                                             stitching=config.patching.stitching,
+                                             levels=config.patching.levels,
+                                             use_distributed=config.distributed.use_distributed,
+                                             device=device)
 
-def main():
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    # Set the compression technique you want to evaluate: "layer" or "magnitude"
-    technique = "layer"
-    
-    # --- Section 1: Evaluate all 4 models ---
-    # Replace these placeholder paths with the actual model weight file paths.
-    models_info = {
-        "FNO": {"class": FNO, "weight": "models/model-fno-darcy-16-resolution-2025-02-05-19-55.pt"},
-        "DeepONet": {"class": DeepONet, "weight": "models/model-deeponet-darcy-16-2025-02-XX.pt"},
-        "GINO": {"class": GINO, "weight": "models/model-gino-carcfd-32-resolution-2025-02-12-18-47.pt"},
-        "Codano": {"class": CODANO, "weight": "models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt"},
-    }
-    
-    results_section1 = {}
-    print("=== Section 1: Evaluating all 4 models using {} pruning ===".format(technique))
-    for model_name, info in models_info.items():
-        print(f"\nProcessing {model_name}...")
-        model_class = info["class"]
-        weight_path = info["weight"]
-        try:
-            base_model, pruned_model, results = load_and_prune_model(
-                model_class, weight_path, test_loaders, data_processor, device, prune_ratio=0.2, technique=technique
-            )
-            results_section1[model_name] = results
-            print(f"{model_name} evaluation results:")
-            print(results)
-        except Exception as e:
-            print(f"Error processing {model_name}: {e}")
-    
-    # --- Section 2: Compare 'Our' vs 'Their' weights for FNO and Codano ---
-    models_info_section2 = {
-        "FNO": {
-            "our": "models/model-our_fno_darcy-16-2025-XX.pt",
-            "theirs": "models/model-their_fno_darcy-16-2025-XX.pt"
-        },
-        "Codano": {
-            "our": "models/model-our_codano_darcy-16-2025-XX.pt",
-            "theirs": "models/model-their_codano_darcy-16-2025-XX.pt"
-        }
-    }
-    
-    results_section2 = {}
-    print("\n=== Section 2: Comparing 'Our' vs 'Their' weights for FNO and Codano using {} pruning ===".format(technique))
-    for model_name, weight_paths in models_info_section2.items():
-        results_section2[model_name] = {}
-        ModelClass = FNO if model_name == "FNO" else CODANO
+# Reconfigure DataLoaders to use a DistributedSampler 
+# if in distributed data parallel mode
+if config.distributed.use_distributed:
+    train_db = train_loader.dataset
+    train_sampler = DistributedSampler(train_db, rank=get_local_rank())
+    train_loader = DataLoader(dataset=train_db,
+                              batch_size=config.data.batch_size,
+                              sampler=train_sampler)
+    for (res, loader), batch_size in zip(test_loaders.items(), config.data.test_batch_sizes):
         
-        for variant, weight_path in weight_paths.items():
-            print(f"\nProcessing {model_name} ({variant})...")
-            try:
-                base_model, pruned_model, results = load_and_prune_model(
-                    ModelClass, weight_path, test_loaders, data_processor, device, prune_ratio=0.2, technique=technique
-                )
-                results_section2[model_name][variant] = results
-                print(f"{model_name} ({variant}) evaluation results:")
-                print(results)
-            except Exception as e:
-                print(f"Error processing {model_name} ({variant}): {e}")
-    
-    # Optionally, log or save the results for your report.
-    print("\nSection 1 Results:")
-    print(results_section1)
-    print("\nSection 2 Results:")
-    print(results_section2)
+        test_db = loader.dataset
+        test_sampler = DistributedSampler(test_db, rank=get_local_rank())
+        test_loaders[res] = DataLoader(dataset=test_db,
+                              batch_size=batch_size,
+                              shuffle=False,
+                              sampler=test_sampler)
+# Create the optimizer
+optimizer = AdamW(
+    model.parameters(),
+    lr=config.opt.learning_rate,
+    weight_decay=config.opt.weight_decay,
+)
 
-if __name__ == "__main__":
-    main()
+if config.opt.scheduler == "ReduceLROnPlateau":
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        factor=config.opt.gamma,
+        patience=config.opt.scheduler_patience,
+        mode="min",
+    )
+elif config.opt.scheduler == "CosineAnnealingLR":
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, T_max=config.opt.scheduler_T_max
+    )
+elif config.opt.scheduler == "StepLR":
+    scheduler = torch.optim.lr_scheduler.StepLR(
+        optimizer, step_size=config.opt.step_size, gamma=config.opt.gamma
+    )
+else:
+    raise ValueError(f"Got scheduler={config.opt.scheduler}")
+
+
+# Creating the losses
+l2loss = LpLoss(d=2, p=2)
+h1loss = H1Loss(d=2)
+if config.opt.training_loss == "l2":
+    train_loss = l2loss
+elif config.opt.training_loss == "h1":
+    train_loss = h1loss
+else:
+    raise ValueError(
+        f'Got training_loss={config.opt.training_loss} '
+        f'but expected one of ["l2", "h1"]'
+    )
+eval_losses = {"h1": h1loss, "l2": l2loss}
+
+if config.verbose and is_logger:
+    print("\n### MODEL ###\n", model)
+    print("\n### OPTIMIZER ###\n", optimizer)
+    print("\n### SCHEDULER ###\n", scheduler)
+    print("\n### LOSSES ###")
+    print(f"\n * Train: {train_loss}")
+    print(f"\n * Test: {eval_losses}")
+    print(f"\n### Beginning Training...\n")
+    sys.stdout.flush()
+
+trainer = Trainer(
+    model=model,
+    n_epochs=config.opt.n_epochs,
+    device=device,
+    data_processor=data_processor,
+    mixed_precision=config.opt.amp_autocast,
+    wandb_log=config.wandb.log,
+    eval_interval=config.wandb.eval_interval,
+    log_output=config.wandb.log_output,
+    use_distributed=config.distributed.use_distributed,
+    verbose=config.verbose and is_logger,
+              )
+
+# Log parameter count
+if is_logger:
+    n_params = count_model_params(model)
+
+    if config.verbose:
+        print(f"\nn_params: {n_params}")
+        sys.stdout.flush()
+
+    if config.wandb.log:
+        to_log = {"n_params": n_params}
+        if config.n_params_baseline is not None:
+            to_log["n_params_baseline"] = (config.n_params_baseline,)
+            to_log["compression_ratio"] = (config.n_params_baseline / n_params,)
+            to_log["space_savings"] = 1 - (n_params / config.n_params_baseline)
+        wandb.log(to_log, commit=False)
+        wandb.watch(model)
+
+# Train the model
+trainer.train(
+    train_loader=train_loader,
+    test_loaders=test_loaders,
+    optimizer=optimizer,
+    scheduler=scheduler,
+    regularizer=False,
+    training_loss=train_loss,
+    eval_losses=eval_losses
+)
+
+if config.wandb.log and is_logger:
+    from datetime import datetime
+    timestamp = datetime.now().strftime('%Y-%m-%d-%H-%M')
+    model_name = f"model-{config.wandb.name}-{timestamp}"
+    
+    torch.save(model.state_dict(), f"{model_name}.pt")
+
+    artifact = wandb.Artifact(
+        name=model_name,
+        type="model",
+        description="Darcy FNO model"
+    )
+    artifact.add_file(f"{model_name}.pt")
+    wandb.log_artifact(artifact)
+
+    wandb.run.log_code(".", include_fn=lambda path: path.endswith(".py") or path.endswith(".yaml"))
+    
+    wandb.finish()

@@ -15,15 +15,11 @@ from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from compression.utils.evaluation_util import evaluate_model, compare_models
 from neuralop.data.transforms.codano_processor import CODANODataProcessor
-from compression.utils.count_params_util import count_selected_layers
 from compression.utils.codano_util import missing_variable_testing, CodanoYParams
 
 # we should use scatter to accerlaerate
-
-torch.manual_seed(42)
-torch.cuda.manual_seed(42)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
+import warnings
+warnings.filterwarnings("ignore", message="use_scatter is True but torch_scatter is not properly built")
 
 
 
@@ -39,8 +35,8 @@ if __name__ == "__main__":
     random.seed(params.random_seed)
     np.random.seed(params.random_seed)
     params.config = args.config
-    #stage = StageEnum.PREDICTIVE
     stage = StageEnum.RECONSTRUCTIVE
+    #stage = StageEnum.RECONSTRUCTIVE
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     variable_encoder = None
@@ -62,8 +58,10 @@ if __name__ == "__main__":
     input_mesh = torch.from_numpy(mesh).type(torch.float).cuda()
     codano_model.set_initial_mesh(input_mesh)
 
+    stage = StageEnum.PREDICTIVE
     codano_model.load_state_dict(torch.load(params.model_path), strict=False)
     codano_model = codano_model.cuda().eval()
+    print(codano_model)
 
     variable_encoder.load_encoder(
                     "NS", params.NS_variable_encoder_path)
@@ -88,7 +86,7 @@ if __name__ == "__main__":
         ntrain=params.get('ntrain'),
         ntest=40,
         batch_size = 1,
-        train_test_split = 0.001, # just for test
+        train_test_split = 0.1, # just for test
         sample_per_inlet=params.sample_per_inlet
     )
 
@@ -106,53 +104,50 @@ if __name__ == "__main__":
                                 "params": params,
                                 "stage": stage,
                                 "input_mesh":input_mesh}
-    print(codano_model)
+    # Compress Models
+    prune_model = CompressedModel(
+        model=codano_model,
+        compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.99),
+        create_replica=True
+    )
+
+    prune_model = prune_model.to(device)
 
 
-    # # Compress Models
-    # prune_model = CompressedModel(
-    #     model=codano_model,
-    #     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.9),
-    #     create_replica=True
-    # )
+    lowrank_model = CompressedModel(
+        model=codano_model,
+        compression_technique=lambda model: SVDLowRank(model, 
+                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
+                                                    min_rank=1,
+                                                    max_rank=256, # option = [8, 16, 32, 64, 128, 256]
+                                                    is_compress_conv1d=False,
+                                                    is_compress_FC=False,
+                                                    is_compress_spectral=True),
+        create_replica=True
+    )
+    lowrank_model = lowrank_model.to(device)
 
-    # prune_model = prune_model.to(device)
+    # Start compare models
+    print("\n"*2)
+    print("Pruning.....")
+    compare_models(
+        model1=codano_model,
+        model2=prune_model,
+        test_loaders=test_dataloader,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = codano_evaluation_params
+    )
 
-
-    # lowrank_model = CompressedModel(
-    #     model=codano_model,
-    #     compression_technique=lambda model: SVDLowRank(model, 
-    #                                                 rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
-    #                                                 min_rank=1,
-    #                                                 max_rank=256, # option = [8, 16, 32, 64, 128, 256]
-    #                                                 is_compress_conv1d=False,
-    #                                                 is_compress_FC=False,
-    #                                                 is_compress_spectral=True),
-    #     create_replica=True
-    # )
-    # lowrank_model = lowrank_model.to(device)
-
-    # # Start compare models
-    # print("\n"*2)
-    # print("Pruning.....")
-    # compare_models(
-    #     model1=codano_model,
-    #     model2=prune_model,
-    #     test_loaders=test_dataloader,
-    #     data_processor=None,
-    #     device=device,
-    #     track_performance = True,
-    #     evaluation_params = codano_evaluation_params
-    # )
-
-    # print("\n"*2)
-    # print("Low Ranking.....")
-    # compare_models(
-    #     model1=codano_model,
-    #     model2=codano_model,
-    #     test_loaders=validation_dataloader,
-    #     data_processor=None,
-    #     device=device,
-    #     track_performance = True,
-    #     evaluation_params = codano_evaluation_params
-    # )
+    print("\n"*2)
+    print("Low Ranking.....")
+    compare_models(
+        model1=codano_model,
+        model2=prune_model,
+        test_loaders=test_dataloader,
+        data_processor=None,
+        device=device,
+        track_performance = True,
+        evaluation_params = codano_evaluation_params
+    )

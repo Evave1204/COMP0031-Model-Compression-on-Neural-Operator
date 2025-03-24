@@ -11,7 +11,7 @@ from functools import partial
 from .quantised_forwards import *
 
 class UniformQuantisation(CompressionTechnique):
-    def __init__(self, model: nn.Module, num_bits: int = 8, num_calibration_runs: int = 32):
+    def __init__(self, model: nn.Module, num_bits: int = 8, num_calibration_runs: int = 16):
         super().__init__(model)
         self.model = model
         self.num_bits = num_bits
@@ -83,10 +83,16 @@ class UniformQuantisation(CompressionTechnique):
     def _quantise_codano(self):
         self.model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
         custom_class_observers = {"float_to_observed_custom_module_class": {SpectralConv: SpectralConvObserverCompatible}}
-        torch.ao.quantization.prepare(self.model, inplace=True, prepare_custom_config_dict=custom_class_observers)
-    
+        torch.ao.quantization.prepare(self.model, 
+                                      inplace=True, 
+                                      prepare_custom_config_dict=custom_class_observers
+                                      )
         for i in range(self.num_calibration_runs):
-            input_tensor = torch.randn(1, 1, 32, 32)
+            input_tensor = torch.randn(3, 1, 1024, 1024)
+            if self.model.static_channel_dim > 0:
+                static_channel = torch.randn(1, self.model.static_channel_dim, 32, 32)
+                self.model(in_data=input_tensor, static_channel=static_channel, variable_ids=self.model.variable_ids)
+                continue
             self.model(in_data=input_tensor, variable_ids=self.model.variable_ids)
 
         torch.ao.quantization.convert(self.model, inplace=True)

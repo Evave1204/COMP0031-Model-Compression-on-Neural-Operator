@@ -89,7 +89,7 @@ validation_dataloaders, test_loaders, data_processor = get_data_val_test_loader(
 
 dynamic_quant_model = CompressedModel(
     model=fno_model,
-    compression_technique=lambda model: UniformQuantisation(model),
+    compression_technique=lambda model: UniformQuantisation(model , num_bits=8, num_calibration_runs=1),
     create_replica=True
 )
 dynamic_quant_model = dynamic_quant_model.to(device)

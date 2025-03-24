@@ -4,6 +4,7 @@ from neuralop.layers.fno_block import *
 from neuralop.layers.skip_connections import *
 from neuralop.layers.coda_layer import CODALayer
 from neuralop.models.deeponet import DeepONet
+from neuralop.models.codano import CODANO
 from neuralop.layers.resample import resample
 import numpy as np
 
@@ -212,7 +213,7 @@ def quantised_deeponet_forward(self : DeepONet, x : torch.Tensor, y : torch.Tens
     
     return out
 
-def quantised_docano_forward(self, **kwargs):
+def quantised_docano_forward(self : CODANO, **kwargs):
     """
     Parameters
     ----------

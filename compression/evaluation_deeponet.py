@@ -77,7 +77,6 @@ validation_loaders, test_loaders, data_processor = load_darcy_flow_small(
 #     track_performance = True
 # )
 
-print("here",test_loaders)
 quantised_model = CompressedModel(
     model=deeponet_model,
     compression_technique=lambda model: UniformQuantisation(model,

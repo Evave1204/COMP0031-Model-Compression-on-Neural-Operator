@@ -11,7 +11,7 @@ from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.utils.fno_util import optional_fno
 
 fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="low")
-device = torch.device('cpu') # ('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cpu') #('cuda' if torch.cuda.is_available() else 'cpu')
 fno_model = fno_model.to(device)
 
 
@@ -50,19 +50,40 @@ train_loader, test_loaders, data_processor = load_darcy_flow_small(
 #     track_performance=True
 # )
 
-quantised_model = CompressedModel(
+stquantised_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: UniformQuantisation(model, 
-                                                            num_bits=8),
+                                                            num_bits=16,
+                                                            num_calibration_runs=1),
     create_replica=True
 )
-quantised_model = quantised_model.to(device)
+print(fno_model)
+print("quuantised module",stquantised_model)
+stquantised_model = stquantised_model.to(device)
 
-quantised_compare = compare_models(
+stquantised_compare = compare_models(
     model1=fno_model,
-    model2=quantised_model,
+    model2=stquantised_model,
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device,
     # track_performance=True
 )
+
+# dyquantised_model = CompressedModel(
+#     model=fno_model,
+#     compression_technique=lambda model: DynamicQuantization(model),
+#     create_replica=True
+# )
+# print(fno_model)
+# print("quuantised module",dyquantised_model)
+# dyquantised_model = dyquantised_model.to(device)
+
+# dyquantised_compare = compare_models(
+#     model1=fno_model,
+#     model2=dyquantised_model,
+#     test_loaders=test_loaders,
+#     data_processor=data_processor,
+#     device=device,
+#     # track_performance=True
+# )

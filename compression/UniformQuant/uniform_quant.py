@@ -1,22 +1,29 @@
 import torch
+import torch.ao.quantization
 import torch.nn as nn
 from compression.base import CompressionTechnique
 from typing import Dict
 import math
 from neuralop.layers.spectral_convolution import SpectralConv
-from neuralop.layers.embeddings import GridEmbeddingND
+from .quantised_classes import *
+from .observer_classes import *
+from torch.nn import Linear, Conv1d, GroupNorm
 
 # need to dequantise on the fly, currently storing quantised tensor prevents inference
 # need to add different levels of quantisation
 
 class UniformQuantisation(CompressionTechnique):
-    def __init__(self, model: nn.Module, num_bits: int = 8):
+    def __init__(self, model: nn.Module, num_bits: int = 8, num_calibration_runs: int = 1):
         super().__init__(model)
         self.model = model
         self.num_bits = num_bits
+        self.num_calibration_runs = num_calibration_runs
         if math.log2(num_bits) % 1 != 0:
             raise ValueError("Number of bits must be a power of 2")
-        self.type = (lambda bits: getattr(torch, f"int{bits}", None))(self.num_bits)
+        if num_bits == 8 or num_bits == 32:
+            self.type = (lambda bits: getattr(torch, f"qint{bits}", None))(self.num_bits)
+        else:
+            self.type = (lambda bits: getattr(torch, f"int{bits}", None))(self.num_bits)
         self.init_size = self.get_size()
 
     def compress(self) -> None:
@@ -33,31 +40,58 @@ class UniformQuantisation(CompressionTechnique):
     def _quantise_model(self) -> None:
         self.model = self.model.cpu()
         self.model.eval()
-        self.model.qconfig = torch.quantization.get_default_qconfig('fbgemm')
-        self.model.qconfig = torch.quantization.QConfig(
-            activation=torch.quantization.MinMaxObserver.with_args(dtype=torch.quint8, qscheme=torch.per_tensor_affine),
-            weight=torch.quantization.PerChannelMinMaxObserver.with_args(dtype=torch.qint8, qscheme=torch.per_channel_symmetric)
-        )
-        custom_class_observers = {} # {"float_to_observed_custom_module_class": {SpectralConv: QuantizedSpectralConv}}
-        self.model = torch.quantization.prepare(self.model, inplace=True, prepare_custom_config_dict=custom_class_observers)
-        tensor_sizes = self.determine_input_shape()
-        for _ in range(1):
-            input_tensors = [torch.randn(size) for size in tensor_sizes]
-            for input_tensor in input_tensors:
-                input_tensor = input_tensor.cpu()
-            self.model(*input_tensors)
-        self.model = torch.quantization.convert(self.model, inplace=True)
-        print(f"\033[91m{self.model}\033[00m")
+        model_name = self.model._get_name()
+        quantise_methods = {
+            "FNO": self._quantise_fno,
+            "DeepONet": self._quantise_deeponet,
+            # Add other model-specific quantization methods here
+        }
+        quantise_method = quantise_methods.get(model_name)
+        if quantise_method:
+            quantise_method()
+        else:
+            raise ValueError(f"Quantization method for model {model_name} is not defined")
+        
+    def _quantise_fno(self) -> None:
+        self.model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
+        custom_class_observers = {"float_to_observed_custom_module_class": {SpectralConv: SpectralConvObserverCompatible}}
+        torch.ao.quantization.prepare(self.model, inplace=True, prepare_custom_config_dict=custom_class_observers)
+
+        for i in range(self.num):
+            input_tensor = torch.randn(1, 1, 16, 16)
+            self.model(input_tensor)
+
+        torch.ao.quantization.convert(self.model, inplace=True)
+
+        self.model.forward = partial(quantised_fno_forward, self.model)
+        self.model.fno_blocks.forward_with_postactivation = partial(quantised_forward_with_postactivation, self.model.fno_blocks)
+        self.model.fno_blocks.forward_with_preactivation = partial(quantised_forward_with_preactivation, self.model.fno_blocks)
+
+    def _quantise_deeponet(self) -> None:
+        pass
+
     
     def determine_input_shape(self) -> list[torch.Size]:
         if self.model._get_name() == "DeepONet":
-            return [torch.Size([1, 1, 1, 1]), torch.Size([1, 1, 1, 1])]
+            return [torch.Size([1, 1, 128, 128]), torch.Size([1, 1, 128, 128])]
         elif self.model._get_name() == "FNO":
             return [torch.Size([1, 1, 16, 16])]
+        elif self.model._get_name() == "CODANO":
+            return [torch.Size([1, 1, 32, 32]), torch.Size([1, 1, 32, 32])]
+        else:
+            print(self.model)
+            exit()
 
-            
-
-
+    def _get_parent_module(self, module_name: str):
+        """
+        Helper function to get the parent module of a given module name.
+        """
+        module_names = module_name.split('.')
+        parent_module = self.model
+        for name in module_names[:-1]:
+            parent_module = getattr(parent_module, name)
+        return parent_module
+    
     def get_size(self) -> float:
         total_size = 0
         param_size = 0
@@ -68,27 +102,3 @@ class UniformQuantisation(CompressionTechnique):
             buffer_size += buffer.nelement() * buffer.element_size()
         total_size = param_size + buffer_size
         return total_size
-
-class QuantizedSpectralConv(nn.Module):
-    def __init__(self, spectral_conv: SpectralConv):
-        super().__init__()
-        self.spectral_conv = spectral_conv
-        self.quant = torch.quantization.QuantStub()
-        self.dequant = torch.quantization.DeQuantStub()
-
-    def forward(self, x, *args, **kwargs):
-        x = self.quant(x)
-        x = self.spectral_conv(x, *args, **kwargs)
-        x = self.dequant(x)
-        return x
-    
-    @classmethod
-    def from_float(cls, float_module: SpectralConv):
-        quant_module = cls(float_module)
-        quant_module.quant = torch.quantization.QuantStub()
-        quant_module.dequant = torch.quantization.DeQuantStub()
-        return quant_module
-
-    @classmethod
-    def transform(cls, float_module: SpectralConv, output_shape=None, **kwargs):
-        return cls.from_float(float_module)

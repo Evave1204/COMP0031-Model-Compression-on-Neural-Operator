@@ -8,19 +8,12 @@ from compression.base import CompressedModel
 from compression.utils.fno_util import FNOYParams
 from neuralop.data.datasets.mixed import get_data_val_test_loader
 from compression.utils.evaluation_util import evaluate_model, compare_models
-from compression.utils.count_params_util import count_selected_layers
-
 import os, sys, time
 import argparse
 import wandb
 import matplotlib.pyplot as plt
 import logging
 import torch.distributed as dist
-
-torch.manual_seed(42)
-torch.cuda.manual_seed(42)
-torch.backends.cudnn.deterministic = True
-torch.backends.cudnn.benchmark = False
 
 parser = argparse.ArgumentParser()
 parser.add_argument("--yaml_config", default='config/mixed_config.yaml', type=str)
@@ -54,12 +47,8 @@ validation_dataloaders, test_loaders, data_processor = get_data_val_test_loader(
                                                                   train=False, 
                                                                   pack=params.pack_data)
 
-param_stats = count_selected_layers(fno_model)
-for layer_type, count in param_stats.items():
-    print(f"{layer_type}: {count} parameters")
 
-# print("\n"*2)
-# print("Compressing Model.....")
+
 # Initialize models 
 # pruned_model = CompressedModel(
 #     model=fno_model,
@@ -71,9 +60,9 @@ for layer_type, count in param_stats.items():
 # lowrank_model = CompressedModel(
 #     model=fno_model,
 #     compression_technique=lambda model: SVDLowRank(model, 
-#                                                    rank_ratio=0.9, # [0.8, 0.85, 0.9, 0.95, 0.97, 0.98, 0.99]
+#                                                    rank_ratio=0.8, # option = [0.2, 0.4, 0.6, 0.8]
 #                                                    min_rank=1,
-#                                                    max_rank=256,
+#                                                    max_rank=128, # option = [8, 16, 32, 64, 128, 256]
 #                                                    is_full_rank=False,
 #                                                    is_compress_conv1d=False,
 #                                                    is_compress_FC=False,
@@ -81,7 +70,6 @@ for layer_type, count in param_stats.items():
 #     create_replica=True
 # )
 
-# lowrank_model = lowrank_model.to(device)
 # lowrank_model = lowrank_model.to(device)
 
 # dynamic_quant_model = CompressedModel(
@@ -107,8 +95,8 @@ dynamic_quant_model = CompressedModel(
 dynamic_quant_model = dynamic_quant_model.to(device)
 
 
-# print("\n"*2)
-# print("Getting Result.....")
+# Start Compression ..
+
 # print("\n"*2)
 # print("Pruning.....")
 # compare_models(
@@ -119,35 +107,23 @@ dynamic_quant_model = dynamic_quant_model.to(device)
 #     device=device
 # )
 
-
-# results = compare_models(
+# print("\n"*2)
+# print("Low Ranking.....")
+# compare_models(
 #     model1=fno_model,
 #     model2=lowrank_model,
-#     test_loaders=validation_dataloaders,
-#     data_processor=data_processor,
-#     device=device,
-#     track_performance = True
-# )
-
-# print("\n"*2)
-# print("Dynamic Quantization.....")
-# compare_models(
-#     model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
-#     model2=dynamic_quant_model,     # The dynamically quantized model
 #     test_loaders=test_loaders,
 #     data_processor=data_processor,
 #     device=device,
 #     track_performance = True
 # )
 
-# print("\n"*2)
-# print("Dynamic Quantization.....")
-# compare_models(
-#     model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
-#     model2=dynamic_quant_model,     # The dynamically quantized model
-#     test_loaders=test_loaders,
-#     data_processor=data_processor,
-#     device=device
-# )
-
-#print(results)
+print("\n"*2)
+print("Dynamic Quantization.....")
+compare_models(
+    model1=fno_model,               # The original model (it will be moved to CPU in evaluate_model)
+    model2=dynamic_quant_model,     # The dynamically quantized model
+    test_loaders=test_loaders,
+    data_processor=data_processor,
+    device=device
+)

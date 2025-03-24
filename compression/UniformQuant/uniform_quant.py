@@ -5,15 +5,13 @@ from compression.base import CompressionTechnique
 from typing import Dict
 import math
 from neuralop.layers.spectral_convolution import SpectralConv
-from .quantised_classes import *
+from neuralop.layers.coda_layer import CODALayer
 from .observer_classes import *
-from torch.nn import Linear, Conv1d, GroupNorm
-
-# need to dequantise on the fly, currently storing quantised tensor prevents inference
-# need to add different levels of quantisation
+from functools import partial
+from .quantised_forwards import *
 
 class UniformQuantisation(CompressionTechnique):
-    def __init__(self, model: nn.Module, num_bits: int = 8, num_calibration_runs: int = 1):
+    def __init__(self, model: nn.Module, num_bits: int = 8, num_calibration_runs: int = 32):
         super().__init__(model)
         self.model = model
         self.num_bits = num_bits
@@ -38,26 +36,28 @@ class UniformQuantisation(CompressionTechnique):
                 }
 
     def _quantise_model(self) -> None:
-        self.model = self.model.cpu()
+        model_device = next(self.model.parameters()).device
         self.model.eval()
+        self.model.cpu()
         model_name = self.model._get_name()
         quantise_methods = {
             "FNO": self._quantise_fno,
             "DeepONet": self._quantise_deeponet,
-            # Add other model-specific quantization methods here
+            "CODANO": self._quantise_codano
         }
         quantise_method = quantise_methods.get(model_name)
         if quantise_method:
             quantise_method()
         else:
             raise ValueError(f"Quantization method for model {model_name} is not defined")
+        self.model.to(model_device)
         
     def _quantise_fno(self) -> None:
         self.model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
         custom_class_observers = {"float_to_observed_custom_module_class": {SpectralConv: SpectralConvObserverCompatible}}
         torch.ao.quantization.prepare(self.model, inplace=True, prepare_custom_config_dict=custom_class_observers)
 
-        for i in range(self.num):
+        for i in range(self.num_calibration_runs):
             input_tensor = torch.randn(1, 1, 16, 16)
             self.model(input_tensor)
 
@@ -68,19 +68,39 @@ class UniformQuantisation(CompressionTechnique):
         self.model.fno_blocks.forward_with_preactivation = partial(quantised_forward_with_preactivation, self.model.fno_blocks)
 
     def _quantise_deeponet(self) -> None:
-        pass
+        self.model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
+        torch.ao.quantization.prepare(self.model, inplace=True)
 
+        for i in range(self.num_calibration_runs):
+            input_tensor = torch.randn(1, 1, 128, 128)
+            input_tensor2 = torch.randn(1, 1, 128, 128)
+            self.model(input_tensor, input_tensor2)
+
+        torch.ao.quantization.convert(self.model, inplace=True)
+
+        self.model.forward = partial(quantised_deeponet_forward, self.model)
+
+    def _quantise_codano(self):
+        self.model.qconfig = torch.ao.quantization.get_default_qconfig('fbgemm')
+        custom_class_observers = {"float_to_observed_custom_module_class": {SpectralConv: SpectralConvObserverCompatible}}
+        torch.ao.quantization.prepare(self.model, inplace=True, prepare_custom_config_dict=custom_class_observers)
     
-    def determine_input_shape(self) -> list[torch.Size]:
-        if self.model._get_name() == "DeepONet":
-            return [torch.Size([1, 1, 128, 128]), torch.Size([1, 1, 128, 128])]
-        elif self.model._get_name() == "FNO":
-            return [torch.Size([1, 1, 16, 16])]
-        elif self.model._get_name() == "CODANO":
-            return [torch.Size([1, 1, 32, 32]), torch.Size([1, 1, 32, 32])]
-        else:
-            print(self.model)
-            exit()
+        for i in range(self.num_calibration_runs):
+            input_tensor = torch.randn(1, 1, 32, 32)
+            self.model(in_data=input_tensor, variable_ids=self.model.variable_ids)
+
+        torch.ao.quantization.convert(self.model, inplace=True)
+
+        for name, module in self.model.named_modules():
+            if isinstance(module, CODALayer):
+                module._forward_equivariant = partial(quantised_docano_coda_layer_forward_equivariant, module)
+                module.compute_attention = partial(quantised_compute_attention, module)
+            if isinstance(module, FNOBlocks):
+                module.forward_with_postactivation = partial(quantised_forward_with_postactivation_docano, module)
+                module.forward_with_preactivation = partial(quantised_forward_with_preactivation_docano, module)
+
+        self.model.forward = partial(quantised_docano_forward, self.model)
+        
 
     def _get_parent_module(self, module_name: str):
         """

@@ -11,7 +11,7 @@ from compression.utils.evaluation_util import evaluate_model, compare_models
 from compression.utils.fno_util import optional_fno
 
 fno_model, train_loader, test_loaders, data_processor = optional_fno(resolution="low")
-device = torch.device('cpu') #('cuda' if torch.cuda.is_available() else 'cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 fno_model = fno_model.to(device)
 
 
@@ -54,7 +54,7 @@ stquantised_model = CompressedModel(
     model=fno_model,
     compression_technique=lambda model: UniformQuantisation(model, 
                                                             num_bits=16,
-                                                            num_calibration_runs=1),
+                                                            num_calibration_runs=32),
     create_replica=True
 )
 print(fno_model)
@@ -67,8 +67,9 @@ stquantised_compare = compare_models(
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device,
-    # track_performance=True
+    track_performance=True
 )
+print(stquantised_compare)
 
 # dyquantised_model = CompressedModel(
 #     model=fno_model,

@@ -110,7 +110,6 @@ def evaluate_model(model,
         
     with torch.no_grad():
         for batch in tqdm(dataloader, disable=False): # show the bar
-        for batch in tqdm(dataloader, disable=False): # show the bar
             x = batch["x"].to(device)
             y = batch["y"].to(device)
             static_features = batch.get("static_features", None)

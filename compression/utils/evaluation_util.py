@@ -341,11 +341,10 @@ def compare_models(model1, model2, test_loaders, data_processor, device,
         results["Comparison"] = {}
         for resolution in test_loaders.keys():
             base_results = results[f"{resolution}_base"]
-            if results.get(f"{resolution}_compressed"):
-                comp_results = results[f"{resolution}_compressed"]
-                l2_change_percentage = (comp_results['l2_loss'] / base_results['l2_loss'] - 1) * 100
-                results["Comparison"]["l2_loss_increase"] = l2_change_percentage
-                print(f"{resolution}x{resolution} - L2: {l2_change_percentage:.2f}%")
+            comp_results = results[f"{resolution}_compressed"]
+            l2_change_percentage = (comp_results['l2_loss'] / base_results['l2_loss'] - 1) * 100
+            results["Comparison"]["l2_loss_increase"] = l2_change_percentage
+            print(f"{resolution}x{resolution} - L2: {l2_change_percentage:.2f}%")
             
             # Performance comparison if tracking enabled
             if track_performance:

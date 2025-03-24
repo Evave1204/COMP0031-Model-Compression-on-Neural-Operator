@@ -67,7 +67,7 @@ stquantised_compare = compare_models(
     test_loaders=test_loaders,
     data_processor=data_processor,
     device=device,
-    track_performance=True
+    #track_performance=True
 )
 print(stquantised_compare)
 

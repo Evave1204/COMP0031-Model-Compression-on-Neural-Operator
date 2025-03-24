@@ -35,7 +35,6 @@ fno_model = CODANO(
 )
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-device = torch.device('cpu')
 fno_model.load_model(torch.load("models/model-codano-darcy-16-resolution-2025-02-11-21-13.pt", weights_only=False))
 fno_model.eval()
 fno_model = fno_model.to(device)

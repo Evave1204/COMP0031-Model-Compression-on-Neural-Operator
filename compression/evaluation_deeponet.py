@@ -21,7 +21,7 @@ deeponet_model = DeepONet(
     dropout=0.1
 )
 
-device = torch.device('cpu')
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-02-19-22-23.pt", weights_only=False))
 deeponet_model.eval()
 deeponet_model = deeponet_model.to(device)
@@ -79,15 +79,22 @@ validation_loaders, test_loaders, data_processor = load_darcy_flow_small(
 
 quantised_model = CompressedModel(
     model=deeponet_model,
-    compression_technique=lambda model: UniformQuantisation(model,
-                                                            num_bits=8),
+    compression_technique=lambda model: DynamicQuantization(model),
     create_replica=True
 )
 quantised_model = quantised_model.to(device)
 
+# quantised_model = CompressedModel(
+#     model=deeponet_model,
+#     compression_technique=lambda model: UniformQuantisation(model,
+#                                                             num_bits=8),
+#     create_replica=True
+# )
+# quantised_model = quantised_model.to(device)
+
 # Evaluate both models on CPU
 print("\n"*2)
-print("Static Quantization.....")
+print("Dynamic Quantization.....")
 compare_models(
     model1=deeponet_model,               # The original model (it will be moved to CPU in evaluate_model)
     model2=quantised_model,     # The dynamically quantized model

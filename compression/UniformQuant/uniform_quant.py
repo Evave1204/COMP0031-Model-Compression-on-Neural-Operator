@@ -11,7 +11,7 @@ from functools import partial
 from .quantised_forwards import *
 
 class UniformQuantisation(CompressionTechnique):
-    def __init__(self, model: nn.Module, num_bits: int = 8, num_calibration_runs: int = 16):
+    def __init__(self, model: nn.Module, num_bits: int = 8, num_calibration_runs: int = 128):
         super().__init__(model)
         self.model = model
         self.num_bits = num_bits
@@ -88,7 +88,7 @@ class UniformQuantisation(CompressionTechnique):
                                       prepare_custom_config_dict=custom_class_observers
                                       )
         for i in range(self.num_calibration_runs):
-            input_tensor = torch.randn(3, 1, 1024, 1024)
+            input_tensor = torch.randn(3, 1, 128, 128)*100
             if self.model.static_channel_dim > 0:
                 static_channel = torch.randn(1, self.model.static_channel_dim, 32, 32)
                 self.model(in_data=input_tensor, static_channel=static_channel, variable_ids=self.model.variable_ids)

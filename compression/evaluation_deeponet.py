@@ -7,6 +7,13 @@ from compression.quantization.dynamic_quantization import DynamicQuantization
 from compression.base import CompressedModel
 from neuralop.data.datasets import load_darcy_flow_small
 from compression.utils.evaluation_util import evaluate_model, compare_models
+from compression.utils.count_params_util import count_selected_layers
+from compression.quantization.dynamic_quantization import DynamicQuantization
+
+torch.manual_seed(42)
+torch.cuda.manual_seed(42)
+torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = False
 
 deeponet_model = DeepONet(
     train_resolution=128,
@@ -21,27 +28,28 @@ deeponet_model = DeepONet(
     dropout=0.1
 )
 
-device = torch.device('cpu')
-deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-02-19-22-23.pt", weights_only=False))
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+deeponet_model.load_state_dict(torch.load("models/model-deeponet-darcy-128-resolution-2025-03-04-18-53.pt", weights_only=False))
 deeponet_model.eval()
 deeponet_model = deeponet_model.to(device)
 
-validation_loaders, test_loaders, data_processor = load_darcy_flow_small(
-    n_train=1000,
+validation_loaders, test_loaders, data_processor = load_darcy_flow_small_validation_test(
+    n_train=10000,
     batch_size=16,
     test_resolutions=[128],
-    n_tests=[100],
-    test_batch_sizes=[16, 16],
+    n_tests=[1000],
+    test_batch_sizes=[4, 4],
     encode_input=False, 
     encode_output=False,
 )
 
-# pruned_model = CompressedModel(
-#     model=deeponet_model,
-#     compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
-#     create_replica=True
-# )
-# pruned_model = pruned_model.to(device)
+'''
+pruned_model = CompressedModel(
+    model=deeponet_model,
+    compression_technique=lambda model: GlobalMagnitudePruning(model, prune_ratio=0.5),
+    create_replica=True
+)
+pruned_model = pruned_model.to(device)
 
 # lowrank_model = CompressedModel(
 #     model=deeponet_model,
